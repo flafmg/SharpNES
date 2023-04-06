@@ -22,11 +22,12 @@ namespace SharpNES.NES
         }
         public void Write(ushort address, byte value)
         {
-            Console.WriteLine("Adress:"+ address + " value: "+ value);
+            Console.WriteLine("Writing Adress:"+ address + " value: "+ value);
             Memory[address] = value;
         }
         public byte Read(ushort address)
         {
+            Console.WriteLine("Reading Adress:" + address + " value: " + Memory[address]);
             return Memory[address];
         }
     }

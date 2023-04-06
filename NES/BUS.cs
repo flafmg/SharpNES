@@ -8,12 +8,15 @@ namespace SharpNES.NES
 {
     public class BUS
     {
-        PPUBUS ppubus = new PPUBUS();
+        PPUBUS ppubus;
         CPU cpu;
         public BUS()
         {
+            ppubus = new PPUBUS(this);
             cpu = new CPU(this);
             RAM ram = new RAM(this);
+            addComponent(ram, 0, 0x1fff);
+
         }
 
         // 0 is readandwrite 1 is readonly
@@ -46,7 +49,30 @@ namespace SharpNES.NES
     }
     class PPUBUS
     {
+        BUS bus;
+        public PPUBUS(BUS bus)
+        {
+            this.bus = bus;
+        }
 
+        IComp[] Components = new IComp[0xffff];
+
+        void addComponent(IComp comp, ushort start, ushort end)
+        {
+            for (int i = start; i <= end; i++)
+            {
+                Components[i] = comp;
+            }
+        }
+
+        public void Write(ushort address, byte value)
+        {
+            Components[address].Write((ushort)(address & Components[address].size()), value);
+        }
+        public byte Read(ushort address)
+        {
+            return Components[address].Read((ushort)(address & Components[address].size()));
+        }
     }
-    
+
 }
