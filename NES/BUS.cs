@@ -17,6 +17,8 @@ namespace SharpNES.NES
             RAM ram = new RAM(this);
             addComponent(ram, 0, 0x1fff);
 
+            Cartrige c = new Cartrige("a");
+            c.load();
         }
 
         // 0 is readandwrite 1 is readonly
