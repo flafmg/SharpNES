@@ -22,7 +22,7 @@ namespace SharpNES.NES
 
         public void load()
         {
-            FileStream fileStream = new FileStream("C:\\nestest.nes", FileMode.Open, FileAccess.Read);
+            FileStream fileStream = new FileStream("C:\\po.nes", FileMode.Open, FileAccess.Read);
             byte[] romRawData = new byte[fileStream.Length];
             fileStream.Read(romRawData, 0, (int)fileStream.Length);
             fileStream.Close();
@@ -42,35 +42,31 @@ namespace SharpNES.NES
                 prgOffset += 512;
             }
 
-          
+
             Console.WriteLine($"  number of PRG-ROM banks: {numPrgBanks}");
             Console.WriteLine($"  number of CHR-ROM banks: {numChrBanks}");
 
 
             Console.WriteLine("$ mapper: " + mapper);
 
+            byte[][] prgBanks = new byte[numPrgBanks][];
             for (int i = 0; i < numPrgBanks; i++)
             {
-                byte[] prgBank = new byte[16384];
-                Buffer.BlockCopy(romRawData, prgOffset + i * 16384, prgBank, 0, 16384);
-                Console.WriteLine($"PRG-ROM Bank {i} (0x{prgOffset + i * 16384:X}):");
-                for (int j = 0; j < prgBank.Length; j += 16)
-                {
-                    Console.WriteLine($"  0x{j + prgOffset + i * 16384:X4}: {BitConverter.ToString(prgBank.Skip(j).Take(16).ToArray()).Replace("-", " ")}");
-                }
+                prgBanks[i] = new byte[16384];
+                Buffer.BlockCopy(romRawData, prgOffset + i * 16384, prgBanks[i], 0, 16384);
+                Console.WriteLine($"\nDados do PRG-ROM Bank {i}: {BitConverter.ToString(prgBanks[i])}");
             }
-
-            // Imprime todos os dados de cada banco de CHR-ROM.
+            Console.WriteLine("\nCHR-ROM\n");
+            byte[][] chrBanks = new byte[numChrBanks][];
             for (int i = 0; i < numChrBanks; i++)
             {
-                byte[] chrBank = new byte[8192];
-                Buffer.BlockCopy(romRawData, prgOffset + numPrgBanks * 16384 + i * 8192, chrBank, 0, 8192);
-                Console.WriteLine($"CHR-ROM Bank {i}:");
-                for (int j = 0; j < chrBank.Length; j += 16)
-                {
-                    Console.WriteLine($"  0x{j + prgOffset + numPrgBanks * 16384 + i * 8192:X4}: {BitConverter.ToString(chrBank.Skip(j).Take(16).ToArray()).Replace("-", " ")}");
-                }
+                chrBanks[i] = new byte[8192];
+                Buffer.BlockCopy(romRawData, prgOffset + numPrgBanks * 16384 + i * 8192, chrBanks[i], 0, 8192);
+                Console.WriteLine($"\nDados do CHR-ROM Bank {i}: {BitConverter.ToString(chrBanks[i])}");
             }
+
+
+
         }
     }
 }
