@@ -1,2 +1,2 @@
 # SharpNES
-i'll work on this again someday
+IM WORKING ON IT AGAIN!

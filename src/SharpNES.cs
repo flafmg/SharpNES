@@ -1,17 +1,18 @@
-﻿using SharpNES.NES;
+﻿using SharpNES.src.hardware;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SharpNES
+namespace SharpNES.src
 {
-    internal class main
+    internal class SharpNES
     {
         public static void Main()
         {
-            new BUS();
+            Console.WriteLine("im alive!");
+            ROM rom = new ROM("cpu.nes");
         }
     }
 }
