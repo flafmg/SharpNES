@@ -231,6 +231,14 @@ namespace SharpNES.src.hardware
 
         // adressing modes
 
+        private void getData()
+        {
+            if (!(ILT[opcode].AddressingMode != IMP))
+            {
+                FetchedData = mmu.Read(AbsoluteAddress);
+            }
+        }
+
         private void ABS()
         {
             byte lowByte = mmu.Read(PC);
@@ -353,23 +361,23 @@ namespace SharpNES.src.hardware
 
         private void ADC()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            ushort value = (ushort)(A + data + (CarryFlag ? 1 : 0));
+            ushort value = (ushort)(A +FetchedData + (CarryFlag ? 1 : 0));
 
             CarryFlag = value > 255;
             ZeroFlag = (value & 0x00FF) == 0;
             NegativeFlag = (value & 0x80) == 1;
-            OverflowFlag = ((A ^ data) & 0x80) == 0 && ((A ^ value) & 0x80) != 0;
+            OverflowFlag = ((A ^FetchedData) & 0x80) == 0 && ((A ^ value) & 0x80) != 0;
 
             A = (byte)(value & 0x00FF);
         }
 
         private void AND()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            A = ((byte)(A & data));
+            A = ((byte)(A &FetchedData));
             ZeroFlag = A == 0x00;
             NegativeFlag = (A & 0x80) == 1;
 
@@ -377,21 +385,21 @@ namespace SharpNES.src.hardware
 
         private void ASL()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            ushort value = (ushort)(data << 1);
+            ushort value = (ushort)(FetchedData << 1);
 
             CarryFlag = (value & 0xFF00) > 0 ;
-            ZeroFlag = (data & 0x00FF) == 0x00;
-            NegativeFlag = (data & 0x80) == 1;
+            ZeroFlag = (FetchedData & 0x00FF) == 0x00;
+            NegativeFlag = (FetchedData & 0x80) == 1;
 
             if (ILT[opcode].AddressingMode == IMP)
             {
-                A = (byte)(data & 0x00FF);
+                A = (byte)(FetchedData & 0x00FF);
             }
             else
             {
-                mmu.Write(AbsoluteAddress, (byte)(data & 0x00FF));
+                mmu.Write(AbsoluteAddress, (byte)(FetchedData & 0x00FF));
             }
 
         }
@@ -446,9 +454,9 @@ namespace SharpNES.src.hardware
 
         private void BIT()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            ushort value = (ushort)(A & data);
+            ushort value = (ushort)(A &FetchedData);
 
             ZeroFlag = (value & 0x00FF) == 0;
             NegativeFlag = (value & 0x80) == 1;
@@ -586,11 +594,11 @@ namespace SharpNES.src.hardware
 
         private void CMP()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            ushort value = (ushort)(A - data);
+            ushort value = (ushort)(A -FetchedData);
 
-            CarryFlag = A >= data;
+            CarryFlag = A >=FetchedData;
             ZeroFlag = (value & 0x00FF) == 0;
             NegativeFlag = (value & 0x0000) == 1;
 
@@ -598,33 +606,33 @@ namespace SharpNES.src.hardware
 
         private void CPX()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            ushort value = (ushort)(X - data);
+            ushort value = (ushort)(X -FetchedData);
 
-            CarryFlag = X >= data;
+            CarryFlag = X >=FetchedData;
             ZeroFlag = (value & 0x00FF) == 0;
             NegativeFlag = (value & 0x0000) == 1;
         }
 
         private void CPY()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            ushort value = (ushort)(Y - data);
+            ushort value = (ushort)(Y -FetchedData);
 
-            CarryFlag = Y >= data;
+            CarryFlag = Y >=FetchedData;
             ZeroFlag = (value & 0x00FF) == 0;
             NegativeFlag = (value & 0x0000) == 1;
         }
 
         private void DEC()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            ushort value = (ushort)(data - 1);
+            ushort value = (ushort)(FetchedData - 1);
 
-            CarryFlag = X >= data;
+            CarryFlag = X >=FetchedData;
             ZeroFlag = (value & 0x00FF) == 0;
             NegativeFlag = (value & 0x0000) == 1;
         }
@@ -645,138 +653,312 @@ namespace SharpNES.src.hardware
 
         private void EOR()
         {
-            ushort data = AbsoluteAddress;
+            getData();
 
-            A = (byte)(A ^ data);
+            A = (byte)(A ^FetchedData);
 
         }
 
         private void INC()
         {
+            getData();
+
+            ushort value = (ushort)(FetchedData + 1);
+
+            mmu.Write(AbsoluteAddress, (byte)(value & 0x00FF));
+         
+
+            ZeroFlag = (value & 0x00FF) == 0;
+            NegativeFlag = (value & 0x0000) == 1;
         }
 
         private void INX()
         {
+            X++;
+
+            ZeroFlag = (X & 0x00FF) == 0;
+            NegativeFlag = (X & 0x0000) == 1;
+
         }
 
         private void INY()
         {
+            Y++;
+
+            ZeroFlag = (Y & 0x00FF) == 0;
+            NegativeFlag = (Y & 0x0000) == 1;
         }
 
         private void JMP()
         {
+            PC = AbsoluteAddress;
         }
 
         private void JSR()
         {
+            PC--;
+
+            mmu.Write((ushort)(0x0100 + SP), (byte)((PC >> 8) * 0x00FF));
+            SP--;
+            mmu.Write((ushort)(0x0100 + SP), (byte)(PC & 0x00FF));
+            SP--;
+
+            PC = AbsoluteAddress;
+
         }
 
         private void LDA()
         {
+            getData();
+            A = (byte)FetchedData;
+
+            ZeroFlag = (A & 0x00FF) == 0;
+            NegativeFlag = (A & 0x0000) == 1;
         }
 
         private void LDX()
         {
+            getData();
+            X = (byte)FetchedData;
+
+            ZeroFlag = (X & 0x00FF) == 0;
+            NegativeFlag = (X & 0x0000) == 1;
         }
 
         private void LDY()
         {
+            getData();
+            Y = (byte)FetchedData;
+
+            ZeroFlag = (Y & 0x00FF) == 0;
+            NegativeFlag = (Y & 0x0000) == 1;
         }
 
         private void LSR()
         {
+            getData();
+
+            CarryFlag = (FetchedData & 0x0001) == 1;
+            ushort value = (ushort)(FetchedData >> 1);
+            ZeroFlag = (value & 0x00FF) == 0;
+            NegativeFlag = (value & 0x0000) == 1;
+
+            if (ILT[opcode].AddressingMode == IMP)
+            {
+                A = (byte)(value * 0x0FF);
+            }
+            else
+            {
+                mmu.Write(AbsoluteAddress, value & 0x00FF);
+            }
+
         }
 
         private void NOP()
         {
+            //does nothing
         }
 
         private void ORA()
         {
+            getData();
+            A = (byte)(A |FetchedData);
+            ZeroFlag = (Y & 0x00FF) == 0;
+            NegativeFlag = (Y & 0x0000) == 1;
         }
 
         private void PHA()
         {
+            mmu.Write(0x0100 + SP, A);
+            SP--;
+
         }
 
         private void PHP()
         {
+            byte status = 0;
+            status |= (byte)(CarryFlag ? 0x01 : 0x00);
+            status |= (byte)(ZeroFlag ? 0x02 : 0x00);
+            status |= (byte)(InterruptDisableFlag ? 0x04 : 0x00);
+            status |= (byte)(DecimalModeFlag ? 0x08 : 0x00);
+            status |= (byte)(BreakFlag ? 0x10 : 0x00);
+            status |= (byte)(OverflowFlag ? 0x40 : 0x00);
+            status |= (byte)(NegativeFlag ? 0x80 : 0x00);
+            mmu.Write(0x0100 + SP, status);
+            BreakFlag = false;
+            SP--;
         }
 
         private void PLA()
         {
+            SP++;
+            A = mmu.Read(0x0100 + SP);
+            ZeroFlag = (A & 0x00FF) == 0;
+            NegativeFlag = (A & 0x0000) == 1;
         }
 
         private void PLP()
         {
+            SP++;
+            byte status = mmu.Read(0x0100 + SP);
+            CarryFlag = (status & 0x01) == 1;
+            ZeroFlag = (status & 0x02) == 1;
+            InterruptDisableFlag = (status & 0x04) == 1;
+            DecimalModeFlag = (status & 0x08) == 1;
+            BreakFlag = (status & 0x10) == 1;
+            OverflowFlag = (status & 0x40) == 1;
+            NegativeFlag = (status & 0x80) == 1;
         }
 
         private void ROL()
         {
+            getData();
+
+            ushort value = (ushort)((FetchedData << 1) | (CarryFlag ? 1 : 0));
+            CarryFlag = (value & 0x01) == 1;
+            ZeroFlag = (value & 0x00FF) == 0;
+            NegativeFlag = (value & 0x0000) == 1;
+
+            if (ILT[opcode].AddressingMode == IMP)
+            {
+                A = (byte)(value & 0x00FF);
+            }
+            else
+            {
+                mmu.Write(AbsoluteAddress, value & 0x00FF);
+            }
         }
 
         private void ROR()
         {
+            getData();
+            ushort value = (ushort)((CarryFlag ? 1 : 0 << 7) | (FetchedData >> 1));
+
+            CarryFlag = (FetchedData & 0x01) == 1;
+            ZeroFlag = (value & 0x00FF) == 0;
+            NegativeFlag = (value & 0x0000) == 1;
+
+            if (ILT[opcode].AddressingMode == IMP)
+            {
+                A = (byte)(value & 0x00FF);
+            }
+            else
+            {
+                mmu.Write(AbsoluteAddress, value & 0x00FF);
+            }
         }
 
         private void RTI()
         {
+            SP++;
+            byte status = mmu.Read(0x0100 + SP);
+            CarryFlag = (status & 0x01) == 1;
+            ZeroFlag = (status & 0x02) == 1;
+            InterruptDisableFlag = (status & 0x04) == 1;
+            DecimalModeFlag = (status & 0x08) == 1;
+            BreakFlag = (status & 0x10) == 1;
+            OverflowFlag = (status & 0x40) == 1;
+            NegativeFlag = (status & 0x80) == 1;
+
+            SP++;
+            PC = mmu.Read(0x0100 + SP);
+            SP++;
+            PC |= (ushort)(mmu.Read(0x0100 + SP) << 8);
+
         }
 
         private void RTS()
         {
+            SP++;
+            PC = mmu.Read(0x0100 + SP);
+            SP++;
+            PC |= (ushort)(mmu.Read(0x0100 + SP) << 8);
+
+            PC++;
         }
 
         private void SBC()
         {
+            getData();
+
+            ushort v = (ushort)(FetchedData ^ 0x00FF);
+
+            ushort value = (ushort)(A + v + (CarryFlag ? 1 : 0));
+            CarryFlag = (value & 0x01) == 1;
+            ZeroFlag = (value & 0x00FF) == 0;
+            NegativeFlag = (value & 0x0000) == 1;
+            OverflowFlag = ((value ^ A) & (value ^ v) & 0x0080) == 1;
+            A = (byte)(value & 0x00FF);
         }
 
         private void SEC()
         {
+            CarryFlag = true;
         }
 
         private void SED()
         {
+            DecimalModeFlag = true;
         }
 
         private void SEI()
         {
+            InterruptDisableFlag = true;
         }
 
         private void STA()
         {
+            mmu.Write(AbsoluteAddress, A);
         }
 
         private void STX()
         {
+            mmu.Write(AbsoluteAddress, X);
         }
 
         private void STY()
         {
+            mmu.Write(AbsoluteAddress, Y);
         }
 
         private void TAX()
         {
+            X = A;
+            ZeroFlag = (X & 0x00FF) == 0;
+            NegativeFlag = (X & 0x0000) == 1;
         }
 
         private void TAY()
         {
+            Y = A;
+            ZeroFlag = (Y & 0x00FF) == 0;
+            NegativeFlag = (Y & 0x0000) == 1;
         }
 
         private void TSX()
         {
+            X = SP;
+            ZeroFlag = (X & 0x00FF) == 0;
+            NegativeFlag = (X & 0x0000) == 1;
         }
 
         private void TXA()
         {
+            A = X;
+            ZeroFlag = (A & 0x00FF) == 0;
+            NegativeFlag = (A & 0x0000) == 1;
         }
 
         private void TXS()
         {
+            SP = X;
         }
 
         private void TYA()
         {
+            A = Y;
+            ZeroFlag = (A & 0x00FF) == 0;
+            NegativeFlag = (A & 0x0000) == 1;
         }
 
     }
