@@ -2,21 +2,22 @@
 using System.Collections.Generic;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using System.Runtime.Intrinsics.X86;
+using System.Drawing;
 
 namespace SharpNES.src.hardware
 {
     internal class CPU
     {
+        public static string debug;
         private MMU mmu;
-        private ROM rom;
 
         private byte A;
         private byte X;
         private byte Y;
         private byte SP;
-        private ushort PC;
+        private ushort PC = 5;
 
-        private ushort opcode;
+        private byte opcode;
 
         private bool CarryFlag;
         private bool ZeroFlag;
@@ -30,20 +31,19 @@ namespace SharpNES.src.hardware
         private ushort AbsoluteAddress;
         private ushort RelativeAddress;
 
-        private uint Clocks; //clocks until next instruction
+        private int Clocks; //clocks until next instruction
 
         private Instruction[] ILT;
 
-        public CPU(MMU mmu, ROM rom)
+        public CPU(MMU mmu)
         {
             this.mmu = mmu;
-            this.rom = rom;
 
             A = 0x0;
             X = 0x0;
             Y = 0x0;
             SP = 0xFD;
-            PC = 0x0;
+            PC = 0xC000;
 
             CarryFlag = false;
             ZeroFlag = false;
@@ -59,160 +59,203 @@ namespace SharpNES.src.hardware
 
             initializeILT();
         }
+        bool run = true;
+        public void cycle()
+        {
+            while (run)
+            {
+                if (Clocks == 0)
+                {
+                    debug += "\n";
+                    debug += $"{PC:X4} ";
 
+                    opcode = mmu.Read(PC);
+
+                    PC++;
+
+                    Clocks = ILT[opcode].Cycles;
+
+                    ILT[opcode].AddressingMode();
+                    ILT[opcode].InstructionAction();
+
+                    int spacesNeeded = Math.Max(17 - (debug.Length - debug.LastIndexOf("\n")), 0);
+                    string spaces = new string(' ', spacesNeeded);
+
+                    debug += spaces + ILT[opcode].name;
+
+                    spacesNeeded = Math.Max(49 - (debug.Length - debug.LastIndexOf("\n")), 0);
+                    spaces = new string(' ', spacesNeeded);
+
+
+
+                    byte status = 0;
+                    status |= (byte)(CarryFlag ? 0x01 : 0x00);
+                    status |= (byte)(ZeroFlag ? 0x02 : 0x00);
+                    status |= (byte)(InterruptDisableFlag ? 0x04 : 0x00);
+                    status |= (byte)(DecimalModeFlag ? 0x08 : 0x00);
+                    status |= (byte)(BreakFlag ? 0x10 : 0x00);
+                    status |= (byte)(OverflowFlag ? 0x40 : 0x00);
+                    status |= (byte)(NegativeFlag ? 0x80 : 0x00);
+
+                    debug += spaces + $"A:{A:X2} X:{X:X2} Y:{Y:X2} S:{Convert.ToString(status, 2).PadLeft(8, '0')}";
+
+                }
+                if (Clocks > 0)
+                {
+                    Clocks--;
+                }
+            }
+
+
+            Console.WriteLine(debug);
+
+            using (StreamWriter writer = new StreamWriter("output.txt"))
+            {
+                writer.Write(debug);
+            }
+        }
 
         private void initializeILT()
         {
             ILT = new Instruction[256];
             for (int i = 0; i < 256; i++)
             {
-                ILT[i] = new Instruction(() => { }, () => { }, 0);
+                ILT[i] = new Instruction(() => { }, () => { }, 0, "NOP");
             }
 
-            ILT[0x00] = new Instruction(BRK, IMP, 7);
-            ILT[0x10] = new Instruction(BPL, REL, 2);
-            ILT[0x20] = new Instruction(JSR, ABS, 6);
-            ILT[0x30] = new Instruction(BMI, REL, 2);
-            ILT[0x40] = new Instruction(RTI, IMP, 6);
-            ILT[0x50] = new Instruction(BVC, REL, 2);
-            ILT[0x60] = new Instruction(RTS, IMP, 6);
-            ILT[0x70] = new Instruction(BVS, REL, 2);
-            ILT[0x90] = new Instruction(BCC, REL, 2);
-            ILT[0xA0] = new Instruction(LDY, IMM, 2);
-            ILT[0xB0] = new Instruction(BCS, REL, 2);
-            ILT[0xC0] = new Instruction(CPY, IMM, 2);
-            ILT[0xD0] = new Instruction(BNE, REL, 2);
-            ILT[0xE0] = new Instruction(CPX, IMM, 2);
-            ILT[0xF0] = new Instruction(BEQ, REL, 2);
-
-            ILT[0x01] = new Instruction(ORA, IDX, 6);
-            ILT[0x11] = new Instruction(ORA, IDY, 5);
-            ILT[0x21] = new Instruction(AND, IDX, 6);
-            ILT[0x31] = new Instruction(AND, IDY, 5);
-            ILT[0x41] = new Instruction(EOR, IDX, 6);
-            ILT[0x51] = new Instruction(EOR, IDY, 5);
-            ILT[0x61] = new Instruction(ADC, IDX, 6);
-            ILT[0x71] = new Instruction(ADC, IDY, 5);
-            ILT[0x81] = new Instruction(STA, IDX, 6);
-            ILT[0x91] = new Instruction(STA, IDY, 6);
-            ILT[0xA1] = new Instruction(LDA, IDX, 6);
-            ILT[0xB1] = new Instruction(LDA, IDY, 5);
-            ILT[0xC1] = new Instruction(CMP, IDX, 6);
-            ILT[0xD1] = new Instruction(CMP, IDY, 5);
-            ILT[0xE1] = new Instruction(SBC, IDX, 6);
-            ILT[0xF1] = new Instruction(SBC, IDY, 5);
-
-            ILT[0xA2] = new Instruction(LDX, IMM, 2);
-
-            ILT[0x24] = new Instruction(BIT, ZP0, 3);
-            ILT[0x84] = new Instruction(STY, ZP0, 3);
-            ILT[0x94] = new Instruction(STY, ZPX, 4);
-            ILT[0xA4] = new Instruction(LDY, ZP0, 3);
-            ILT[0xB4] = new Instruction(LDY, ZPX, 4);
-            ILT[0xC4] = new Instruction(CPY, ZP0, 3);
-            ILT[0xE4] = new Instruction(CPX, ZP0, 3);
-
-            ILT[0x05] = new Instruction(ORA, ZP0, 3);
-            ILT[0x15] = new Instruction(ORA, ZPX, 4);
-            ILT[0x25] = new Instruction(AND, ZP0, 3);
-            ILT[0x35] = new Instruction(AND, ZPX, 4);
-            ILT[0x45] = new Instruction(EOR, ZP0, 3);
-            ILT[0x55] = new Instruction(EOR, ZPX, 4);
-            ILT[0x65] = new Instruction(ADC, ZP0, 3);
-            ILT[0x75] = new Instruction(ADC, ZPX, 4);
-            ILT[0x85] = new Instruction(STA, ZP0, 3);
-            ILT[0x95] = new Instruction(STA, ZPX, 4);
-            ILT[0xA5] = new Instruction(LDA, ZP0, 3);
-            ILT[0xB5] = new Instruction(LDA, ZPX, 4);
-            ILT[0xC5] = new Instruction(CMP, ZP0, 3);
-            ILT[0xD5] = new Instruction(CMP, ZPX, 4);
-            ILT[0xE5] = new Instruction(SBC, ZP0, 3);
-            ILT[0xF5] = new Instruction(SBC, ZPX, 4);
-
-            ILT[0x06] = new Instruction(ASL, ZP0, 5);
-            ILT[0x16] = new Instruction(ASL, ZPX, 6);
-            ILT[0x26] = new Instruction(ROL, ZP0, 5);
-            ILT[0x36] = new Instruction(ROL, ZPX, 6);
-            ILT[0x46] = new Instruction(LSR, ZP0, 5);
-            ILT[0x56] = new Instruction(LSR, ZPX, 6);
-            ILT[0x66] = new Instruction(ROR, ZP0, 5);
-            ILT[0x76] = new Instruction(ROR, ZPX, 6);
-            ILT[0x86] = new Instruction(STX, ZP0, 3);
-            ILT[0x96] = new Instruction(STX, ZPY, 4);
-            ILT[0xA6] = new Instruction(LDX, ZP0, 3);
-            ILT[0xB6] = new Instruction(LDX, ZPY, 4);
-            ILT[0xC6] = new Instruction(DEC, ZP0, 5);
-            ILT[0xD6] = new Instruction(DEC, ZPX, 6);
-            ILT[0xE6] = new Instruction(INC, ZP0, 5);
-            ILT[0xF6] = new Instruction(INC, ZPX, 6);
-
-            ILT[0x08] = new Instruction(PHP, IMP, 3);
-            ILT[0x18] = new Instruction(CLC, IMP, 2);
-            ILT[0x28] = new Instruction(PLP, IMP, 4);
-            ILT[0x38] = new Instruction(SEC, IMP, 2);
-            ILT[0x48] = new Instruction(PHA, IMP, 3);
-            ILT[0x58] = new Instruction(CLI, IMP, 2);
-            ILT[0x68] = new Instruction(PLA, IMP, 4);
-            ILT[0x78] = new Instruction(SEI, IMP, 2);
-            ILT[0x88] = new Instruction(DEY, IMP, 2);
-            ILT[0x98] = new Instruction(TYA, IMP, 2);
-            ILT[0xA8] = new Instruction(TAY, IMP, 2);
-            ILT[0xB8] = new Instruction(CLV, IMP, 2);
-            ILT[0xC8] = new Instruction(INY, IMP, 2);
-            ILT[0xD8] = new Instruction(CLD, IMP, 2);
-            ILT[0xE8] = new Instruction(INX, IMP, 2);
-            ILT[0xF8] = new Instruction(SED, IMP, 2);
-
-            ILT[0x09] = new Instruction(ORA, IMM, 2);
-            ILT[0x19] = new Instruction(ORA, ABY, 4);
-            ILT[0x29] = new Instruction(AND, IMM, 2);
-            ILT[0x39] = new Instruction(AND, ABY, 4);
-            ILT[0x49] = new Instruction(EOR, IMM, 2);
-            ILT[0x59] = new Instruction(EOR, ABY, 4);
-            ILT[0x69] = new Instruction(ADC, IMM, 2);
-            ILT[0x79] = new Instruction(ADC, ABY, 4);
-            ILT[0x99] = new Instruction(STA, ABY, 5);
-            ILT[0xA9] = new Instruction(LDA, IMM, 2);
-            ILT[0xB9] = new Instruction(LDA, ABY, 4);
-            ILT[0xC9] = new Instruction(CMP, IMM, 2);
-            ILT[0xD9] = new Instruction(CMP, ABY, 4);
-            ILT[0xE9] = new Instruction(SBC, IMM, 2);
-            ILT[0xF9] = new Instruction(SBC, ABY, 4);
-
-            ILT[0x6C] = new Instruction(JMP, IND, 5);
-
-            ILT[0x2C] = new Instruction(BIT, ABS, 4);
-            ILT[0x4C] = new Instruction(JMP, ABS, 3);
-            ILT[0x8C] = new Instruction(STY, ABS, 4);
-            ILT[0xAC] = new Instruction(LDY, ABS, 4);
-            ILT[0xBC] = new Instruction(LDY, ABX, 4);
-            ILT[0xCC] = new Instruction(CPY, ABS, 4);
-            ILT[0xEC] = new Instruction(CPX, ABS, 4);
-
-            ILT[0x0E] = new Instruction(ASL, ABS, 6);
-            ILT[0x1E] = new Instruction(ASL, ABX, 7);
-            ILT[0x2E] = new Instruction(ROL, ABS, 6);
-            ILT[0x3E] = new Instruction(ROL, ABX, 7);
-            ILT[0x4E] = new Instruction(LSR, ABS, 6);
-            ILT[0x5E] = new Instruction(LSR, ABX, 7);
-            ILT[0x6E] = new Instruction(ROR, ABS, 6);
-            ILT[0x7E] = new Instruction(ROR, ABX, 7);
-            ILT[0x8E] = new Instruction(STX, ABS, 4);
-            ILT[0xAE] = new Instruction(LDX, ABS, 4);
-            ILT[0xBE] = new Instruction(LDX, ABX, 4);
-            ILT[0xCE] = new Instruction(DEC, ABS, 6);
-            ILT[0xDE] = new Instruction(DEC, ABX, 7);
-            ILT[0xEE] = new Instruction(INC, ABS, 6);
-            ILT[0xFE] = new Instruction(INC, ABX, 7);
-
-            ILT[0x10] = new Instruction(BPL, REL, 2);
-            ILT[0x30] = new Instruction(BMI, REL, 2);
-            ILT[0x50] = new Instruction(BVC, REL, 2);
-            ILT[0x70] = new Instruction(BVS, REL, 2);
-            ILT[0x90] = new Instruction(BCC, REL, 2);
-            ILT[0xB0] = new Instruction(BCS, REL, 2);
-            ILT[0xD0] = new Instruction(BNE, REL, 2);
-            ILT[0xF0] = new Instruction(BEQ, REL, 2);
+            ILT[0x00] = new Instruction(BRK, IMP, 7,"BRK");
+            ILT[0x10] = new Instruction(BPL, REL, 2,"BPL");
+            ILT[0x20] = new Instruction(JSR, ABS, 6,"JSR");
+            ILT[0x30] = new Instruction(BMI, REL, 2,"BMI");
+            ILT[0x40] = new Instruction(RTI, IMP, 6,"RTI");
+            ILT[0x50] = new Instruction(BVC, REL, 2,"BVC");
+            ILT[0x60] = new Instruction(RTS, IMP, 6,"RTS");
+            ILT[0x70] = new Instruction(BVS, REL, 2,"BVS");
+            ILT[0x90] = new Instruction(BCC, REL, 2,"BCC");
+            ILT[0xA0] = new Instruction(LDY, IMM, 2,"LDY");
+            ILT[0xB0] = new Instruction(BCS, REL, 2,"BCS");
+            ILT[0xC0] = new Instruction(CPY, IMM, 2,"CPY");
+            ILT[0xD0] = new Instruction(BNE, REL, 2,"BNE");
+            ILT[0xE0] = new Instruction(CPX, IMM, 2,"CPX");
+            ILT[0xF0] = new Instruction(BEQ, REL, 2,"BEQ");
+            ILT[0x01] = new Instruction(ORA, IDX, 6,"ORA");
+            ILT[0x11] = new Instruction(ORA, IDY, 5,"ORA");
+            ILT[0x21] = new Instruction(AND, IDX, 6,"AND");
+            ILT[0x31] = new Instruction(AND, IDY, 5,"AND");
+            ILT[0x41] = new Instruction(EOR, IDX, 6,"EOR");
+            ILT[0x51] = new Instruction(EOR, IDY, 5,"EOR");
+            ILT[0x61] = new Instruction(ADC, IDX, 6,"ADC");
+            ILT[0x71] = new Instruction(ADC, IDY, 5,"ADC");
+            ILT[0x81] = new Instruction(STA, IDX, 6,"STA");
+            ILT[0x91] = new Instruction(STA, IDY, 6,"STA");
+            ILT[0xA1] = new Instruction(LDA, IDX, 6,"LDA");
+            ILT[0xB1] = new Instruction(LDA, IDY, 5,"LDA");
+            ILT[0xC1] = new Instruction(CMP, IDX, 6,"CMP");
+            ILT[0xD1] = new Instruction(CMP, IDY, 5,"CMP");
+            ILT[0xE1] = new Instruction(SBC, IDX, 6,"SBC");
+            ILT[0xF1] = new Instruction(SBC, IDY, 5,"SBC");
+            ILT[0xA2] = new Instruction(LDX, IMM, 2,"LDX");
+            ILT[0x24] = new Instruction(BIT, ZP0, 3,"BIT");
+            ILT[0x84] = new Instruction(STY, ZP0, 3,"STY");
+            ILT[0x94] = new Instruction(STY, ZPX, 4,"STY");
+            ILT[0xA4] = new Instruction(LDY, ZP0, 3,"LDY");
+            ILT[0xB4] = new Instruction(LDY, ZPX, 4,"LDY");
+            ILT[0xC4] = new Instruction(CPY, ZP0, 3,"CPY");
+            ILT[0xE4] = new Instruction(CPX, ZP0, 3,"CPX");
+            ILT[0x05] = new Instruction(ORA, ZP0, 3,"ORA");
+            ILT[0x15] = new Instruction(ORA, ZPX, 4,"ORA");
+            ILT[0x25] = new Instruction(AND, ZP0, 3,"AND");
+            ILT[0x35] = new Instruction(AND, ZPX, 4,"AND");
+            ILT[0x45] = new Instruction(EOR, ZP0, 3,"EOR");
+            ILT[0x55] = new Instruction(EOR, ZPX, 4,"EOR");
+            ILT[0x65] = new Instruction(ADC, ZP0, 3,"ADC");
+            ILT[0x75] = new Instruction(ADC, ZPX, 4,"ADC");
+            ILT[0x85] = new Instruction(STA, ZP0, 3,"STA");
+            ILT[0x95] = new Instruction(STA, ZPX, 4,"STA");
+            ILT[0xA5] = new Instruction(LDA, ZP0, 3,"LDA");
+            ILT[0xB5] = new Instruction(LDA, ZPX, 4,"LDA");
+            ILT[0xC5] = new Instruction(CMP, ZP0, 3,"CMP");
+            ILT[0xD5] = new Instruction(CMP, ZPX, 4,"CMP");
+            ILT[0xE5] = new Instruction(SBC, ZP0, 3,"SBC");
+            ILT[0xF5] = new Instruction(SBC, ZPX, 4,"SBC");
+            ILT[0x06] = new Instruction(ASL, ZP0, 5,"ASL");
+            ILT[0x16] = new Instruction(ASL, ZPX, 6,"ASL");
+            ILT[0x26] = new Instruction(ROL, ZP0, 5,"ROL");
+            ILT[0x36] = new Instruction(ROL, ZPX, 6,"ROL");
+            ILT[0x46] = new Instruction(LSR, ZP0, 5,"LSR");
+            ILT[0x56] = new Instruction(LSR, ZPX, 6,"LSR");
+            ILT[0x66] = new Instruction(ROR, ZP0, 5,"ROR");
+            ILT[0x76] = new Instruction(ROR, ZPX, 6,"ROR");
+            ILT[0x86] = new Instruction(STX, ZP0, 3,"STX");
+            ILT[0x96] = new Instruction(STX, ZPY, 4,"STX");
+            ILT[0xA6] = new Instruction(LDX, ZP0, 3,"LDX");
+            ILT[0xB6] = new Instruction(LDX, ZPY, 4,"LDX");
+            ILT[0xC6] = new Instruction(DEC, ZP0, 5,"DEC");
+            ILT[0xD6] = new Instruction(DEC, ZPX, 6,"DEC");
+            ILT[0xE6] = new Instruction(INC, ZP0, 5,"INC");
+            ILT[0xF6] = new Instruction(INC, ZPX, 6,"INC");
+            ILT[0x08] = new Instruction(PHP, IMP, 3,"PHP");
+            ILT[0x18] = new Instruction(CLC, IMP, 2,"CLC");
+            ILT[0x28] = new Instruction(PLP, IMP, 4,"PLP");
+            ILT[0x38] = new Instruction(SEC, IMP, 2,"SEC");
+            ILT[0x48] = new Instruction(PHA, IMP, 3,"PHA");
+            ILT[0x58] = new Instruction(CLI, IMP, 2,"CLI");
+            ILT[0x68] = new Instruction(PLA, IMP, 4,"PLA");
+            ILT[0x78] = new Instruction(SEI, IMP, 2,"SEI");
+            ILT[0x88] = new Instruction(DEY, IMP, 2,"DEY");
+            ILT[0x98] = new Instruction(TYA, IMP, 2,"TYA");
+            ILT[0xA8] = new Instruction(TAY, IMP, 2,"TAY");
+            ILT[0xB8] = new Instruction(CLV, IMP, 2,"CLV");
+            ILT[0xC8] = new Instruction(INY, IMP, 2,"INY");
+            ILT[0xD8] = new Instruction(CLD, IMP, 2,"CLD");
+            ILT[0xE8] = new Instruction(INX, IMP, 2,"INX");
+            ILT[0xF8] = new Instruction(SED, IMP, 2,"SED");
+            ILT[0x09] = new Instruction(ORA, IMM, 2,"ORA");
+            ILT[0x19] = new Instruction(ORA, ABY, 4,"ORA");
+            ILT[0x29] = new Instruction(AND, IMM, 2,"AND");
+            ILT[0x39] = new Instruction(AND, ABY, 4,"AND");
+            ILT[0x49] = new Instruction(EOR, IMM, 2,"EOR");
+            ILT[0x59] = new Instruction(EOR, ABY, 4,"EOR");
+            ILT[0x69] = new Instruction(ADC, IMM, 2,"ADC");
+            ILT[0x79] = new Instruction(ADC, ABY, 4,"ADC");
+            ILT[0x99] = new Instruction(STA, ABY, 5,"STA");
+            ILT[0xA9] = new Instruction(LDA, IMM, 2,"LDA");
+            ILT[0xB9] = new Instruction(LDA, ABY, 4,"LDA");
+            ILT[0xC9] = new Instruction(CMP, IMM, 2,"CMP");
+            ILT[0xD9] = new Instruction(CMP, ABY, 4,"CMP");
+            ILT[0xE9] = new Instruction(SBC, IMM, 2,"SBC");
+            ILT[0xF9] = new Instruction(SBC, ABY, 4,"SBC");
+            ILT[0x6C] = new Instruction(JMP, IND, 5,"JMP");
+            ILT[0x2C] = new Instruction(BIT, ABS, 4,"BIT");
+            ILT[0x4C] = new Instruction(JMP, ABS, 3,"JMP");
+            ILT[0x8C] = new Instruction(STY, ABS, 4,"STY");
+            ILT[0xAC] = new Instruction(LDY, ABS, 4,"LDY");
+            ILT[0xBC] = new Instruction(LDY, ABX, 4,"LDY");
+            ILT[0xCC] = new Instruction(CPY, ABS, 4,"CPY");
+            ILT[0xEC] = new Instruction(CPX, ABS, 4,"CPX");
+            ILT[0x0E] = new Instruction(ASL, ABS, 6,"ASL");
+            ILT[0x1E] = new Instruction(ASL, ABX, 7,"ASL");
+            ILT[0x2E] = new Instruction(ROL, ABS, 6,"ROL");
+            ILT[0x3E] = new Instruction(ROL, ABX, 7,"ROL");
+            ILT[0x4E] = new Instruction(LSR, ABS, 6,"LSR");
+            ILT[0x5E] = new Instruction(LSR, ABX, 7,"LSR");
+            ILT[0x6E] = new Instruction(ROR, ABS, 6,"ROR");
+            ILT[0x7E] = new Instruction(ROR, ABX, 7,"ROR");
+            ILT[0x8E] = new Instruction(STX, ABS, 4,"STX");
+            ILT[0xAE] = new Instruction(LDX, ABS, 4,"LDX");
+            ILT[0xBE] = new Instruction(LDX, ABX, 4,"LDX");
+            ILT[0xCE] = new Instruction(DEC, ABS, 6,"DEC");
+            ILT[0xDE] = new Instruction(DEC, ABX, 7,"DEC");
+            ILT[0xEE] = new Instruction(INC, ABS, 6,"INC");
+            ILT[0xFE] = new Instruction(INC, ABX, 7,"INC");
+            ILT[0x10] = new Instruction(BPL, REL, 2,"BPL");
+            ILT[0x30] = new Instruction(BMI, REL, 2,"BMI");
+            ILT[0x50] = new Instruction(BVC, REL, 2,"BVC");
+            ILT[0x70] = new Instruction(BVS, REL, 2,"BVS");
+            ILT[0x90] = new Instruction(BCC, REL, 2,"BCC");
+            ILT[0xB0] = new Instruction(BCS, REL, 2,"BCS");
+            ILT[0xD0] = new Instruction(BNE, REL, 2,"BNE");
+            ILT[0xF0] = new Instruction(BEQ, REL, 2,"BEQ");
         }
 
         private struct Instruction
@@ -220,12 +263,14 @@ namespace SharpNES.src.hardware
             public Action AddressingMode;
             public Action InstructionAction;
             public int Cycles;
+            public string name;
 
-            public Instruction(Action addressingMode, Action instructionAction, int cycles)
+            public Instruction(Action instructionAction , Action addressingMode, int cycles, string name)
             {
                 AddressingMode = addressingMode;
                 InstructionAction = instructionAction;
                 Cycles = cycles;
+                this.name = name;
             }
         }
 
@@ -233,7 +278,7 @@ namespace SharpNES.src.hardware
 
         private void getData()
         {
-            if (!(ILT[opcode].AddressingMode != IMP))
+            if ((ILT[opcode].AddressingMode != IMP))
             {
                 FetchedData = mmu.Read(AbsoluteAddress);
             }
@@ -245,9 +290,9 @@ namespace SharpNES.src.hardware
             PC++;
             byte highByte = mmu.Read(PC);
             PC++;
-
             AbsoluteAddress = (ushort)((highByte << 8) | lowByte);
-         
+
+           
         }
 
         private void ABX()
@@ -276,6 +321,7 @@ namespace SharpNES.src.hardware
 
             if ((AbsoluteAddress & 0xFF00) != (highByte << 8))
                 Clocks++;
+
         }
 
         private void IMM()
@@ -514,6 +560,7 @@ namespace SharpNES.src.hardware
 
         private void BRK()
         {
+            run = false;
             PC++;
 
             InterruptDisableFlag = true;
@@ -569,6 +616,7 @@ namespace SharpNES.src.hardware
                 }
 
                 PC = AbsoluteAddress;
+                debug += $"{PC:X4}";
             }
         }
 
