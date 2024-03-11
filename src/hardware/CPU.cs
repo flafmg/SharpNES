@@ -19,13 +19,57 @@ namespace SharpNES.src.hardware
 
         private byte opcode;
 
-        private bool CarryFlag;
-        private bool ZeroFlag;
-        private bool InterruptDisableFlag;
-        private bool DecimalModeFlag;
-        private bool OverflowFlag;
-        private bool NegativeFlag;
-        private bool BreakFlag;
+        private byte status;
+
+        // Properties representing individual flags
+        public bool CarryFlag
+        {
+            get { return (status & 0x01) != 0; }
+            set { status = (byte)((status & 0xFE) | (value ? 1 : 0)); }
+        }
+
+        public bool ZeroFlag
+        {
+            get { return (status & 0x02) != 0; }
+            set { status = (byte)((status & 0xFD) | (value ? 2 : 0)); }
+        }
+
+        public bool InterruptDisableFlag
+        {
+            get { return (status & 0x04) != 0; }
+            set { status = (byte)((status & 0xFB) | (value ? 4 : 0)); }
+        }
+
+        public bool DecimalModeFlag
+        {
+            get { return (status & 0x08) != 0; }
+            set { status = (byte)((status & 0xF7) | (value ? 8 : 0)); }
+        }
+
+        public bool BreakFlag
+        {
+            get { return (status & 0x10) != 0; }
+            set { status = (byte)((status & 0xEF) | (value ? 0x10 : 0)); }
+        }
+
+        public bool UnusedFlag
+        {
+            get { return (status & 0x20) != 0; }
+            set { status = (byte)((status & 0xDF) | (value ? 0x20 : 0)); }
+        }
+
+        public bool OverflowFlag
+        {
+            get { return (status & 0x40) != 0; }
+            set { status = (byte)((status & 0xBF) | (value ? 0x40 : 0)); }
+        }
+
+        public bool NegativeFlag
+        {
+            get { return (status & 0x80) != 0; }
+            set { status = (byte)((status & 0x7F) | (value ? 0x80 : 0)); }
+        }
+
 
         private byte FetchedData;
         private ushort AbsoluteAddress;
@@ -62,43 +106,80 @@ namespace SharpNES.src.hardware
         bool run = true;
         public void cycle()
         {
+            InterruptDisableFlag = true;
             while (run)
             {
                 if (Clocks == 0)
                 {
-                    debug += "\n";
-                    debug += $"{PC:X4} ";
+                    UnusedFlag = true;
+                    debug += $"{PC:X4}  ";
 
                     opcode = mmu.Read(PC);
-
+       
                     PC++;
-
                     Clocks = ILT[opcode].Cycles;
-
+                    byte oldA = A;
+                    byte oldX = X;
+                    byte oldY = Y;
+                    byte oldS = status;
                     ILT[opcode].AddressingMode();
+                    ushort oldPc = PC;
                     ILT[opcode].InstructionAction();
+
+                    UnusedFlag = true;
 
                     int spacesNeeded = Math.Max(17 - (debug.Length - debug.LastIndexOf("\n")), 0);
                     string spaces = new string(' ', spacesNeeded);
 
                     debug += spaces + ILT[opcode].name;
+                    if (ILT[opcode].InstructionAction == JMP || ILT[opcode].InstructionAction == JSR)
+                    {
+                        debug += $" ${PC:X4}";
+                    }
+                    else if(ILT[opcode].InstructionAction == BEQ || ILT[opcode].InstructionAction == BCC
+                        || ILT[opcode].InstructionAction == BCS || ILT[opcode].InstructionAction == BNE
+                        || ILT[opcode].InstructionAction == BVS || ILT[opcode].InstructionAction == BVC
+                        || ILT[opcode].InstructionAction == BPL || ILT[opcode].InstructionAction == BMI)
+                    {
+                        debug += $" ${oldPc + RelativeAddress:X4}";
+                    }
+                    else if (ILT[opcode].InstructionAction == LDA || ILT[opcode].InstructionAction == LDX || ILT[opcode].InstructionAction == LDY
+                        || ILT[opcode].InstructionAction == AND || ILT[opcode].InstructionAction == CMP || ILT[opcode].InstructionAction == ORA
+                        || ILT[opcode].InstructionAction == EOR || ILT[opcode].InstructionAction == ADC || ILT[opcode].InstructionAction == CPY
+                        || ILT[opcode].InstructionAction == CPX || ILT[opcode].InstructionAction == SBC)
+                    {
+                        debug += $" #${(byte)FetchedData:X2}";
+                    }
+                    else if (ILT[opcode].InstructionAction == STA || ILT[opcode].InstructionAction == STX || ILT[opcode].InstructionAction == STY
+                        || ILT[opcode].InstructionAction == BIT)
+                    {
+                        debug += $" ${AbsoluteAddress:X2} = ";
+                        if (ILT[opcode].InstructionAction == STA)
+                        {
+                            debug += $"{A:X2}";
+                        }
+                        else if (ILT[opcode].InstructionAction == STX)
+                        {
+                            debug += $"{X:X2}";
+                        }
+                        else if (ILT[opcode].InstructionAction == STY)
+                        {
+                            debug += $"{Y:X2}";
+                        }else if (ILT[opcode].InstructionAction == BIT)
+                        {
+                            debug += $"{FetchedData:X2}";
+
+                        }
+                    }
 
                     spacesNeeded = Math.Max(49 - (debug.Length - debug.LastIndexOf("\n")), 0);
                     spaces = new string(' ', spacesNeeded);
 
 
+                    debug += spaces + $"A:{oldA:X2} X:{oldX:X2} Y:{oldY:X2} P:{oldS:X2} SP:{SP:X2}";
+                   
 
-                    byte status = 0;
-                    status |= (byte)(CarryFlag ? 0x01 : 0x00);
-                    status |= (byte)(ZeroFlag ? 0x02 : 0x00);
-                    status |= (byte)(InterruptDisableFlag ? 0x04 : 0x00);
-                    status |= (byte)(DecimalModeFlag ? 0x08 : 0x00);
-                    status |= (byte)(BreakFlag ? 0x10 : 0x00);
-                    status |= (byte)(OverflowFlag ? 0x40 : 0x00);
-                    status |= (byte)(NegativeFlag ? 0x80 : 0x00);
-
-                    debug += spaces + $"A:{A:X2} X:{X:X2} Y:{Y:X2} S:{Convert.ToString(status, 2).PadLeft(8, '0')}";
-
+                    debug += "\n";
                 }
                 if (Clocks > 0)
                 {
@@ -123,6 +204,7 @@ namespace SharpNES.src.hardware
                 ILT[i] = new Instruction(() => { }, () => { }, 0, "NOP");
             }
 
+
             ILT[0x00] = new Instruction(BRK, IMP, 7,"BRK");
             ILT[0x10] = new Instruction(BPL, REL, 2,"BPL");
             ILT[0x20] = new Instruction(JSR, ABS, 6,"JSR");
@@ -138,6 +220,7 @@ namespace SharpNES.src.hardware
             ILT[0xD0] = new Instruction(BNE, REL, 2,"BNE");
             ILT[0xE0] = new Instruction(CPX, IMM, 2,"CPX");
             ILT[0xF0] = new Instruction(BEQ, REL, 2,"BEQ");
+
             ILT[0x01] = new Instruction(ORA, IDX, 6,"ORA");
             ILT[0x11] = new Instruction(ORA, IDY, 5,"ORA");
             ILT[0x21] = new Instruction(AND, IDX, 6,"AND");
@@ -154,7 +237,9 @@ namespace SharpNES.src.hardware
             ILT[0xD1] = new Instruction(CMP, IDY, 5,"CMP");
             ILT[0xE1] = new Instruction(SBC, IDX, 6,"SBC");
             ILT[0xF1] = new Instruction(SBC, IDY, 5,"SBC");
+
             ILT[0xA2] = new Instruction(LDX, IMM, 2,"LDX");
+
             ILT[0x24] = new Instruction(BIT, ZP0, 3,"BIT");
             ILT[0x84] = new Instruction(STY, ZP0, 3,"STY");
             ILT[0x94] = new Instruction(STY, ZPX, 4,"STY");
@@ -162,6 +247,7 @@ namespace SharpNES.src.hardware
             ILT[0xB4] = new Instruction(LDY, ZPX, 4,"LDY");
             ILT[0xC4] = new Instruction(CPY, ZP0, 3,"CPY");
             ILT[0xE4] = new Instruction(CPX, ZP0, 3,"CPX");
+
             ILT[0x05] = new Instruction(ORA, ZP0, 3,"ORA");
             ILT[0x15] = new Instruction(ORA, ZPX, 4,"ORA");
             ILT[0x25] = new Instruction(AND, ZP0, 3,"AND");
@@ -178,6 +264,7 @@ namespace SharpNES.src.hardware
             ILT[0xD5] = new Instruction(CMP, ZPX, 4,"CMP");
             ILT[0xE5] = new Instruction(SBC, ZP0, 3,"SBC");
             ILT[0xF5] = new Instruction(SBC, ZPX, 4,"SBC");
+
             ILT[0x06] = new Instruction(ASL, ZP0, 5,"ASL");
             ILT[0x16] = new Instruction(ASL, ZPX, 6,"ASL");
             ILT[0x26] = new Instruction(ROL, ZP0, 5,"ROL");
@@ -194,6 +281,7 @@ namespace SharpNES.src.hardware
             ILT[0xD6] = new Instruction(DEC, ZPX, 6,"DEC");
             ILT[0xE6] = new Instruction(INC, ZP0, 5,"INC");
             ILT[0xF6] = new Instruction(INC, ZPX, 6,"INC");
+
             ILT[0x08] = new Instruction(PHP, IMP, 3,"PHP");
             ILT[0x18] = new Instruction(CLC, IMP, 2,"CLC");
             ILT[0x28] = new Instruction(PLP, IMP, 4,"PLP");
@@ -210,6 +298,7 @@ namespace SharpNES.src.hardware
             ILT[0xD8] = new Instruction(CLD, IMP, 2,"CLD");
             ILT[0xE8] = new Instruction(INX, IMP, 2,"INX");
             ILT[0xF8] = new Instruction(SED, IMP, 2,"SED");
+
             ILT[0x09] = new Instruction(ORA, IMM, 2,"ORA");
             ILT[0x19] = new Instruction(ORA, ABY, 4,"ORA");
             ILT[0x29] = new Instruction(AND, IMM, 2,"AND");
@@ -225,6 +314,18 @@ namespace SharpNES.src.hardware
             ILT[0xD9] = new Instruction(CMP, ABY, 4,"CMP");
             ILT[0xE9] = new Instruction(SBC, IMM, 2,"SBC");
             ILT[0xF9] = new Instruction(SBC, ABY, 4,"SBC");
+
+            ILT[0x0A] = new Instruction(ASL, IMP, 2, "ASL");
+            ILT[0x2A] = new Instruction(ROL, IMP, 2, "ROL");
+            ILT[0x4A] = new Instruction(LSR, IMP, 2, "LSR");
+            ILT[0x6A] = new Instruction(ROR, IMP, 2, "ROR");
+            ILT[0x8A] = new Instruction(TXA, IMP, 2, "TXA");
+            ILT[0x9A] = new Instruction(TXS, IMP, 2, "TXS");
+            ILT[0xAA] = new Instruction(TAX, IMP, 2, "TAX");
+            ILT[0xBA] = new Instruction(TSX, IMP, 2, "TSX");
+            ILT[0xCA] = new Instruction(DEX, IMP, 2, "DEX");
+            ILT[0xEA] = new Instruction(NOP, IMP, 2, "NOP");
+
             ILT[0x6C] = new Instruction(JMP, IND, 5,"JMP");
             ILT[0x2C] = new Instruction(BIT, ABS, 4,"BIT");
             ILT[0x4C] = new Instruction(JMP, ABS, 3,"JMP");
@@ -233,6 +334,24 @@ namespace SharpNES.src.hardware
             ILT[0xBC] = new Instruction(LDY, ABX, 4,"LDY");
             ILT[0xCC] = new Instruction(CPY, ABS, 4,"CPY");
             ILT[0xEC] = new Instruction(CPX, ABS, 4,"CPX");
+
+            ILT[0x0D] = new Instruction(ORA, ABS, 4, "ORA");
+            ILT[0x1D] = new Instruction(ORA, ABX, 4, "ORA");
+            ILT[0x2D] = new Instruction(AND, ABS, 4, "AND");
+            ILT[0x3D] = new Instruction(AND, ABX, 4, "AND");
+            ILT[0x4D] = new Instruction(EOR, ABS, 4, "EOR");
+            ILT[0x5D] = new Instruction(EOR, ABX, 4, "EOR");
+            ILT[0x6D] = new Instruction(ADC, ABS, 4, "ADC");
+            ILT[0x7D] = new Instruction(ADC, ABX, 4, "ADC");
+            ILT[0x8D] = new Instruction(STA, ABS, 4, "STA");
+            ILT[0x9D] = new Instruction(STA, ABX, 5, "STA");
+            ILT[0xAD] = new Instruction(LDA, ABS, 4, "LDA");
+            ILT[0xBD] = new Instruction(LDA, ABX, 4, "LDA");
+            ILT[0xCD] = new Instruction(CMP, ABS, 4, "CMP");
+            ILT[0xDD] = new Instruction(CMP, ABX, 4, "CMP");
+            ILT[0xED] = new Instruction(SBC, ABS, 4, "SBC");
+            ILT[0xFD] = new Instruction(SBC, ABX, 4, "SBC");
+
             ILT[0x0E] = new Instruction(ASL, ABS, 6,"ASL");
             ILT[0x1E] = new Instruction(ASL, ABX, 7,"ASL");
             ILT[0x2E] = new Instruction(ROL, ABS, 6,"ROL");
@@ -248,14 +367,8 @@ namespace SharpNES.src.hardware
             ILT[0xDE] = new Instruction(DEC, ABX, 7,"DEC");
             ILT[0xEE] = new Instruction(INC, ABS, 6,"INC");
             ILT[0xFE] = new Instruction(INC, ABX, 7,"INC");
-            ILT[0x10] = new Instruction(BPL, REL, 2,"BPL");
-            ILT[0x30] = new Instruction(BMI, REL, 2,"BMI");
-            ILT[0x50] = new Instruction(BVC, REL, 2,"BVC");
-            ILT[0x70] = new Instruction(BVS, REL, 2,"BVS");
-            ILT[0x90] = new Instruction(BCC, REL, 2,"BCC");
-            ILT[0xB0] = new Instruction(BCS, REL, 2,"BCS");
-            ILT[0xD0] = new Instruction(BNE, REL, 2,"BNE");
-            ILT[0xF0] = new Instruction(BEQ, REL, 2,"BEQ");
+
+
         }
 
         private struct Instruction
@@ -348,22 +461,24 @@ namespace SharpNES.src.hardware
 
         private void IDX()
         {
+            ushort ptr = mmu.Read(PC);
+            PC++;
 
-            ushort lowByte = mmu.Read((ushort)((PC + X) & 0x00FF));
-            PC++;
-            ushort highByte = mmu.Read((ushort)((PC + X) & 0x00FF));
-            PC++;
+            ushort lowByte = mmu.Read((ushort)((ptr + X) & 0x00FF));
+            ushort highByte = mmu.Read((ushort)((ptr + X + 1) & 0x00FF));
+            
 
             AbsoluteAddress = (ushort)((highByte << 8) | lowByte);
-
         }
 
         private void IDY()
         {
-            ushort lowByte = mmu.Read((ushort)(PC & 0x00FF));
+            ushort ptr = mmu.Read(PC);
             PC++;
-            ushort highByte = mmu.Read((ushort)(PC & 0x00FF));
-            PC++;
+
+            ushort lowByte = mmu.Read((ushort)((ptr) & 0x00FF));
+            ushort highByte = mmu.Read((ushort)((ptr + 1) & 0x00FF));
+
 
             AbsoluteAddress = (ushort)((highByte << 8) | lowByte);
             AbsoluteAddress += Y;
@@ -411,10 +526,10 @@ namespace SharpNES.src.hardware
 
             ushort value = (ushort)(A +FetchedData + (CarryFlag ? 1 : 0));
 
-            CarryFlag = value > 255;
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x80) == 1;
-            OverflowFlag = ((A ^FetchedData) & 0x80) == 0 && ((A ^ value) & 0x80) != 0;
+            CarryFlag = value > 0x00FF;
+            ZeroFlag = (byte)(value & 0x00FF) == 0x00;
+            NegativeFlag = ((byte)(value & 0x00FF) > 127);
+            OverflowFlag = (~(A ^ FetchedData) & (A ^ value) & 0x0080) != 0;
 
             A = (byte)(value & 0x00FF);
         }
@@ -423,9 +538,9 @@ namespace SharpNES.src.hardware
         {
             getData();
 
-            A = ((byte)(A &FetchedData));
+            A = ((byte)(A & FetchedData));
             ZeroFlag = A == 0x00;
-            NegativeFlag = (A & 0x80) == 1;
+            NegativeFlag = (A > 127);
 
         }
 
@@ -434,14 +549,13 @@ namespace SharpNES.src.hardware
             getData();
 
             ushort value = (ushort)(FetchedData << 1);
-
-            CarryFlag = (value & 0xFF00) > 0 ;
-            ZeroFlag = (FetchedData & 0x00FF) == 0x00;
-            NegativeFlag = (FetchedData & 0x80) == 1;
+            CarryFlag = value > 0x00FF;
+            ZeroFlag = ((byte)(value & 0x00FF) == 0x00);
+            NegativeFlag = ((value & 0x00FF) > 127);
 
             if (ILT[opcode].AddressingMode == IMP)
             {
-                A = (byte)(FetchedData & 0x00FF);
+                A = (byte)(value & 0x00FF);
             }
             else
             {
@@ -472,7 +586,6 @@ namespace SharpNES.src.hardware
             {
                 Clocks++;
                 AbsoluteAddress = (ushort)(PC + RelativeAddress);
-
                 if ((AbsoluteAddress & 0xFF00) != (PC & 0xFF00))
                 {
                     Clocks++;
@@ -484,11 +597,11 @@ namespace SharpNES.src.hardware
 
         private void BEQ()
         {
+            
             if (ZeroFlag)
             {
                 Clocks++;
                 AbsoluteAddress = (ushort)(PC + RelativeAddress);
-
                 if ((AbsoluteAddress & 0xFF00) != (PC & 0xFF00))
                 {
                     Clocks++;
@@ -502,12 +615,11 @@ namespace SharpNES.src.hardware
         {
             getData();
 
-            ushort value = (ushort)(A &FetchedData);
-
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x80) == 1;
-            OverflowFlag = (value & (1<<6)) == 1;
-
+            byte value = (byte)(A & FetchedData);
+            Console.WriteLine($"{PC:X4}: {value:X2}");
+            ZeroFlag = value == 0;
+            NegativeFlag = (value > 127);
+            OverflowFlag = ((FetchedData & (1 << 6)) != 0);
         }
 
         private void BMI()
@@ -564,24 +676,17 @@ namespace SharpNES.src.hardware
             PC++;
 
             InterruptDisableFlag = true;
+
             mmu.Write((ushort)(0x0100 + SP), (byte)((PC >> 8) & 0x00FF));
-            SP++;
+            SP--;
             mmu.Write((ushort)(0x0100 + SP), (byte)(PC & 0x00FF));
-            SP++;
+            SP--;
 
             BreakFlag = true;
 
-            byte status = 0;
-            status |= (byte)(CarryFlag ? 0x01 : 0x00);
-            status |= (byte)(ZeroFlag ? 0x02 : 0x00);
-            status |= (byte)(InterruptDisableFlag ? 0x04 : 0x00);
-            status |= (byte)(DecimalModeFlag ? 0x08 : 0x00);
-            status |= (byte)(BreakFlag ? 0x10 : 0x00);
-            status |= (byte)(OverflowFlag ? 0x40 : 0x00);
-            status |= (byte)(NegativeFlag ? 0x80 : 0x00);
+            mmu.Write((ushort)(0x0100 + SP), status);
 
             BreakFlag = false;
-            mmu.Write((ushort)(0x0100 + SP), status);
 
             PC = (ushort)(mmu.Read(0xFFFE) | (mmu.Read(0xFFFF) << 8));
 
@@ -616,7 +721,6 @@ namespace SharpNES.src.hardware
                 }
 
                 PC = AbsoluteAddress;
-                debug += $"{PC:X4}";
             }
         }
 
@@ -644,11 +748,11 @@ namespace SharpNES.src.hardware
         {
             getData();
 
-            ushort value = (ushort)(A -FetchedData);
+            byte value = (byte)(A - FetchedData);
 
-            CarryFlag = A >=FetchedData;
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x0000) == 1;
+            CarryFlag = A >= FetchedData;
+            ZeroFlag = value == 0x00;
+            NegativeFlag = (value > 127);
 
         }
 
@@ -658,9 +762,9 @@ namespace SharpNES.src.hardware
 
             ushort value = (ushort)(X -FetchedData);
 
-            CarryFlag = X >=FetchedData;
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x0000) == 1;
+            CarryFlag = X >= FetchedData;
+            ZeroFlag = value == 0x00;
+            NegativeFlag = (value > 127);
         }
 
         private void CPY()
@@ -669,9 +773,9 @@ namespace SharpNES.src.hardware
 
             ushort value = (ushort)(Y -FetchedData);
 
-            CarryFlag = Y >=FetchedData;
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x0000) == 1;
+            CarryFlag = Y >= FetchedData;
+            ZeroFlag = value == 0x00;
+            NegativeFlag = (value > 127);
         }
 
         private void DEC()
@@ -689,14 +793,14 @@ namespace SharpNES.src.hardware
         {
             X--;
             ZeroFlag = X == 0x00;
-            NegativeFlag = X == 0x00;
+            NegativeFlag = X > 127;
         }
 
         private void DEY()
         {
             Y--;
             ZeroFlag = Y == 0x00;
-            NegativeFlag = Y == 0x00;
+            NegativeFlag = Y > 127;
         }
 
         private void EOR()
@@ -704,7 +808,8 @@ namespace SharpNES.src.hardware
             getData();
 
             A = (byte)(A ^FetchedData);
-
+            ZeroFlag = A == 0x00;
+            NegativeFlag = (A > 127);
         }
 
         private void INC()
@@ -746,7 +851,7 @@ namespace SharpNES.src.hardware
         {
             PC--;
 
-            mmu.Write((ushort)(0x0100 + SP), (byte)((PC >> 8) * 0x00FF));
+            mmu.Write((ushort)(0x0100 + SP), (byte)((PC >> 8) & 0x00FF));
             SP--;
             mmu.Write((ushort)(0x0100 + SP), (byte)(PC & 0x00FF));
             SP--;
@@ -760,8 +865,9 @@ namespace SharpNES.src.hardware
             getData();
             A = (byte)FetchedData;
 
-            ZeroFlag = (A & 0x00FF) == 0;
-            NegativeFlag = (A & 0x0000) == 1;
+            ZeroFlag = A == 0x00;
+            NegativeFlag = (A > 127);
+            
         }
 
         private void LDX()
@@ -769,8 +875,8 @@ namespace SharpNES.src.hardware
             getData();
             X = (byte)FetchedData;
 
-            ZeroFlag = (X & 0x00FF) == 0;
-            NegativeFlag = (X & 0x0000) == 1;
+            ZeroFlag = X == 0x00;
+            NegativeFlag = (X > 127);
         }
 
         private void LDY()
@@ -778,8 +884,8 @@ namespace SharpNES.src.hardware
             getData();
             Y = (byte)FetchedData;
 
-            ZeroFlag = (Y & 0x00FF) == 0;
-            NegativeFlag = (Y & 0x0000) == 1;
+            ZeroFlag = Y == 0x00;
+            NegativeFlag = (Y > 127);
         }
 
         private void LSR()
@@ -787,13 +893,13 @@ namespace SharpNES.src.hardware
             getData();
 
             CarryFlag = (FetchedData & 0x0001) == 1;
-            ushort value = (ushort)(FetchedData >> 1);
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x0000) == 1;
+            byte value = (byte)(FetchedData >> 1);
+            ZeroFlag = value == 0x00;
+            NegativeFlag = (value > 127);
 
             if (ILT[opcode].AddressingMode == IMP)
             {
-                A = (byte)(value * 0x0FF);
+                A = (byte)(value & 0x00FF);
             }
             else
             {
@@ -811,8 +917,8 @@ namespace SharpNES.src.hardware
         {
             getData();
             A = (byte)(A |FetchedData);
-            ZeroFlag = (Y & 0x00FF) == 0;
-            NegativeFlag = (Y & 0x0000) == 1;
+            ZeroFlag = A == 0x00;
+            NegativeFlag = (A > 127);
         }
 
         private void PHA()
@@ -824,16 +930,9 @@ namespace SharpNES.src.hardware
 
         private void PHP()
         {
-            byte status = 0;
-            status |= (byte)(CarryFlag ? 0x01 : 0x00);
-            status |= (byte)(ZeroFlag ? 0x02 : 0x00);
-            status |= (byte)(InterruptDisableFlag ? 0x04 : 0x00);
-            status |= (byte)(DecimalModeFlag ? 0x08 : 0x00);
-            status |= (byte)(BreakFlag ? 0x10 : 0x00);
-            status |= (byte)(OverflowFlag ? 0x40 : 0x00);
-            status |= (byte)(NegativeFlag ? 0x80 : 0x00);
             mmu.Write(0x0100 + SP, status);
             BreakFlag = false;
+            UnusedFlag = false;
             SP--;
         }
 
@@ -841,21 +940,16 @@ namespace SharpNES.src.hardware
         {
             SP++;
             A = mmu.Read(0x0100 + SP);
-            ZeroFlag = (A & 0x00FF) == 0;
-            NegativeFlag = (A & 0x0000) == 1;
+            ZeroFlag = A == 0x00;
+            NegativeFlag = (A > 127);
+
         }
 
         private void PLP()
         {
             SP++;
-            byte status = mmu.Read(0x0100 + SP);
-            CarryFlag = (status & 0x01) == 1;
-            ZeroFlag = (status & 0x02) == 1;
-            InterruptDisableFlag = (status & 0x04) == 1;
-            DecimalModeFlag = (status & 0x08) == 1;
-            BreakFlag = (status & 0x10) == 1;
-            OverflowFlag = (status & 0x40) == 1;
-            NegativeFlag = (status & 0x80) == 1;
+            status = mmu.Read(0x0100 + SP);
+
         }
 
         private void ROL()
@@ -863,9 +957,9 @@ namespace SharpNES.src.hardware
             getData();
 
             ushort value = (ushort)((FetchedData << 1) | (CarryFlag ? 1 : 0));
-            CarryFlag = (value & 0x01) == 1;
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x0000) == 1;
+            CarryFlag = value > 0x00FF;
+            ZeroFlag = (value & 0x00FF) == 0x00;
+            NegativeFlag = (value & 0x00FF) > 127;
 
             if (ILT[opcode].AddressingMode == IMP)
             {
@@ -880,11 +974,10 @@ namespace SharpNES.src.hardware
         private void ROR()
         {
             getData();
-            ushort value = (ushort)((CarryFlag ? 1 : 0 << 7) | (FetchedData >> 1));
-
-            CarryFlag = (FetchedData & 0x01) == 1;
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x0000) == 1;
+            ushort value = (ushort)(((CarryFlag ? 1 : 0) << 7) | (FetchedData >> 1));
+            CarryFlag = (FetchedData & 0x01) != 0;
+            ZeroFlag = (value & 0x00FF) == 0x00;
+            NegativeFlag = (value & 0x00FF) > 127;
 
             if (ILT[opcode].AddressingMode == IMP)
             {
@@ -899,14 +992,7 @@ namespace SharpNES.src.hardware
         private void RTI()
         {
             SP++;
-            byte status = mmu.Read(0x0100 + SP);
-            CarryFlag = (status & 0x01) == 1;
-            ZeroFlag = (status & 0x02) == 1;
-            InterruptDisableFlag = (status & 0x04) == 1;
-            DecimalModeFlag = (status & 0x08) == 1;
-            BreakFlag = (status & 0x10) == 1;
-            OverflowFlag = (status & 0x40) == 1;
-            NegativeFlag = (status & 0x80) == 1;
+            status = mmu.Read(0x0100 + SP);
 
             SP++;
             PC = mmu.Read(0x0100 + SP);
@@ -932,10 +1018,10 @@ namespace SharpNES.src.hardware
             ushort v = (ushort)(FetchedData ^ 0x00FF);
 
             ushort value = (ushort)(A + v + (CarryFlag ? 1 : 0));
-            CarryFlag = (value & 0x01) == 1;
-            ZeroFlag = (value & 0x00FF) == 0;
-            NegativeFlag = (value & 0x0000) == 1;
-            OverflowFlag = ((value ^ A) & (value ^ v) & 0x0080) == 1;
+            CarryFlag = (value & 0xFF00) != 0;
+            ZeroFlag = (value & 0x00FF) == 0x00;
+            NegativeFlag = ((value & 0x00FF) > 127);
+            OverflowFlag = ((value ^ A) & (value ^ v) & 0x0080) != 0;
             A = (byte)(value & 0x00FF);
         }
 
@@ -972,29 +1058,29 @@ namespace SharpNES.src.hardware
         private void TAX()
         {
             X = A;
-            ZeroFlag = (X & 0x00FF) == 0;
-            NegativeFlag = (X & 0x0000) == 1;
+            ZeroFlag = A == 0x00;
+            NegativeFlag = A > 127;
         }
 
         private void TAY()
         {
             Y = A;
-            ZeroFlag = (Y & 0x00FF) == 0;
-            NegativeFlag = (Y & 0x0000) == 1;
+            ZeroFlag = Y == 0x00;
+            NegativeFlag = Y > 127;
         }
 
         private void TSX()
         {
             X = SP;
-            ZeroFlag = (X & 0x00FF) == 0;
-            NegativeFlag = (X & 0x0000) == 1;
+            ZeroFlag = X == 0x00;
+            NegativeFlag = X > 127;
         }
 
         private void TXA()
         {
             A = X;
-            ZeroFlag = (A & 0x00FF) == 0;
-            NegativeFlag = (A & 0x0000) == 1;
+            ZeroFlag = A == 0x00;
+            NegativeFlag = A > 127;
         }
 
         private void TXS()
@@ -1005,8 +1091,8 @@ namespace SharpNES.src.hardware
         private void TYA()
         {
             A = Y;
-            ZeroFlag = (A & 0x00FF) == 0;
-            NegativeFlag = (A & 0x0000) == 1;
+            ZeroFlag = A == 0x00;
+            NegativeFlag = A > 127;
         }
 
     }
