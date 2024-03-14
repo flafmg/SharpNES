@@ -26,6 +26,8 @@ namespace SharpNES.src.hardware
                 fileStream.Read(romRawData, 0, (int)fileStream.Length);
             }
 
+            Console.WriteLine("rom raw data size: ");
+
             // Verificando o formato do arquivo
             if (romRawData.Length < 16 || romRawData[0] != 0x4E || romRawData[1] != 0x45 || romRawData[2] != 0x53 || romRawData[3] != 0x1A)
             {

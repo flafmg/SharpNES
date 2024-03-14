@@ -29,8 +29,8 @@ namespace SharpNES.src.hardware
             }
             else if(address >= 0x8000)
             {
-                CPU.debug += ($"{(rom.ProgramRomBanks[0][(address - 0x8000) % 0x4000]):X2} ");
-                return rom.ProgramRomBanks[0][(address - 0x8000) % 0x4000];
+                CPU.debug += ($"{(rom.ProgramRomBanks[0][((address - 0x8000) % 0x4000)]):X2} ");
+                return rom.ProgramRomBanks[0][((address - 0x8000) % 0x4000)];
             }
 
             return 0;
