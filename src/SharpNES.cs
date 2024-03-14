@@ -13,9 +13,9 @@ namespace SharpNES.src
         {
             Console.WriteLine("im alive!");
             ROM rom = new ROM("nestest.nes");
-            MMU mmu = new MMU(rom);
-            CPU cpu = new CPU(mmu);
-            cpu.cycle();
+
+            new NES(ConsoleRegion.NTSC, rom).PowerOn();
+            
         }
 
     }

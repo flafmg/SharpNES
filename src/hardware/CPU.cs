@@ -23,6 +23,8 @@ namespace SharpNES.src.hardware
 
         private byte status;
 
+        private bool halt;
+
         // Properties representing individual flags
         public bool CarryFlag
         {
@@ -108,15 +110,30 @@ namespace SharpNES.src.hardware
 
             initializeILT();
         }
+
+        bool log = false;
         public void cycle()
         {
-
+            if (halt)
+            {
+                if (log)
+                {
+                    using (StreamWriter writer = new StreamWriter("output.txt"))
+                    {
+                        writer.Write(finalDebugg);
+                    }
+                }
+                return;
+            }
             if (waitCycles == 0)
             {
 
                 UnusedFlag = true;
-                debug = $"{PC:X4}  ";
 
+                if (log)
+                {
+                    debug = $"{PC:X4}  ";
+                }
                 opcode = mmu.Read(PC);
 
                 PC++;
@@ -131,78 +148,72 @@ namespace SharpNES.src.hardware
 
                 UnusedFlag = true;
 
-                int spacesNeeded = Math.Max(17 - (debug.Length - debug.LastIndexOf("\n")), 0);
-                string spaces = new string(' ', spacesNeeded);
+                if (log)
+                {
+                    int spacesNeeded = Math.Max(17 - (debug.Length - debug.LastIndexOf("\n")), 0);
+                    string spaces = new string(' ', spacesNeeded);
 
-                debug += spaces + ILT[opcode].name;
-                if (ILT[opcode].InstructionAction == JMP || ILT[opcode].InstructionAction == JSR)
-                {
-                    debug += $" ${PC:X4}";
-                }
-                else if (ILT[opcode].InstructionAction == BEQ || ILT[opcode].InstructionAction == BCC
-                    || ILT[opcode].InstructionAction == BCS || ILT[opcode].InstructionAction == BNE
-                    || ILT[opcode].InstructionAction == BVS || ILT[opcode].InstructionAction == BVC
-                    || ILT[opcode].InstructionAction == BPL || ILT[opcode].InstructionAction == BMI)
-                {
-                    debug += $" ${(oldPc + relativeAddress) % 0xFFFF:X4}";
-                }
-                else if (ILT[opcode].InstructionAction == LDA || ILT[opcode].InstructionAction == LDX || ILT[opcode].InstructionAction == LDY
-                    || ILT[opcode].InstructionAction == AND || ILT[opcode].InstructionAction == CMP || ILT[opcode].InstructionAction == ORA
-                    || ILT[opcode].InstructionAction == EOR || ILT[opcode].InstructionAction == ADC || ILT[opcode].InstructionAction == CPY
-                    || ILT[opcode].InstructionAction == CPX || ILT[opcode].InstructionAction == SBC)
-                {
-                    debug += $" #${(byte)fetchedData:X2}";
-                }
-                else if (ILT[opcode].InstructionAction == STA || ILT[opcode].InstructionAction == STX || ILT[opcode].InstructionAction == STY
-                    || ILT[opcode].InstructionAction == BIT)
-                {
-                    debug += $" ${absoluteAddress:X2} = ";
-                    if (ILT[opcode].InstructionAction == STA)
+                    debug += spaces + ILT[opcode].name;
+                    if (ILT[opcode].InstructionAction == JMP || ILT[opcode].InstructionAction == JSR)
                     {
-                        debug += $"{A:X2}";
+                        debug += $" ${PC:X4}";
                     }
-                    else if (ILT[opcode].InstructionAction == STX)
+                    else if (ILT[opcode].InstructionAction == BEQ || ILT[opcode].InstructionAction == BCC
+                        || ILT[opcode].InstructionAction == BCS || ILT[opcode].InstructionAction == BNE
+                        || ILT[opcode].InstructionAction == BVS || ILT[opcode].InstructionAction == BVC
+                        || ILT[opcode].InstructionAction == BPL || ILT[opcode].InstructionAction == BMI)
                     {
-                        debug += $"{X:X2}";
+                        debug += $" ${(oldPc + relativeAddress) % 0xFFFF:X4}";
                     }
-                    else if (ILT[opcode].InstructionAction == STY)
+                    else if (ILT[opcode].InstructionAction == LDA || ILT[opcode].InstructionAction == LDX || ILT[opcode].InstructionAction == LDY
+                        || ILT[opcode].InstructionAction == AND || ILT[opcode].InstructionAction == CMP || ILT[opcode].InstructionAction == ORA
+                        || ILT[opcode].InstructionAction == EOR || ILT[opcode].InstructionAction == ADC || ILT[opcode].InstructionAction == CPY
+                        || ILT[opcode].InstructionAction == CPX || ILT[opcode].InstructionAction == SBC)
                     {
-                        debug += $"{Y:X2}";
+                        debug += $" #${(byte)fetchedData:X2}";
                     }
-                    else if (ILT[opcode].InstructionAction == BIT)
+                    else if (ILT[opcode].InstructionAction == STA || ILT[opcode].InstructionAction == STX || ILT[opcode].InstructionAction == STY
+                        || ILT[opcode].InstructionAction == BIT)
                     {
-                        debug += $"{fetchedData:X2}";
+                        debug += $" ${absoluteAddress:X2} = ";
+                        if (ILT[opcode].InstructionAction == STA)
+                        {
+                            debug += $"{A:X2}";
+                        }
+                        else if (ILT[opcode].InstructionAction == STX)
+                        {
+                            debug += $"{X:X2}";
+                        }
+                        else if (ILT[opcode].InstructionAction == STY)
+                        {
+                            debug += $"{Y:X2}";
+                        }
+                        else if (ILT[opcode].InstructionAction == BIT)
+                        {
+                            debug += $"{fetchedData:X2}";
+
+                        }
 
                     }
 
+                    spacesNeeded = Math.Max(49 - (debug.Length - debug.LastIndexOf("\n")), 0);
+                    spaces = new string(' ', spacesNeeded);
+
+
+                    debug += spaces + $"A:{oldA:X2} X:{oldX:X2} Y:{oldY:X2} P:{oldS:X2} SP:{SP:X2} CYC: {clocksPassed}";
+
+
+                    finalDebugg += debug + "\n";
+                    Console.WriteLine(debug);
                 }
-
-                spacesNeeded = Math.Max(49 - (debug.Length - debug.LastIndexOf("\n")), 0);
-                spaces = new string(' ', spacesNeeded);
-
-
-                debug += spaces + $"A:{oldA:X2} X:{oldX:X2} Y:{oldY:X2} P:{oldS:X2} SP:{SP:X2} CYC: {clocksPassed}";
-
-
-                finalDebugg += debug + "\n";
-                Console.WriteLine(debug);
-
-
-                if (waitCycles > 0)
-                {
-                    waitCycles--;
-                }
-
-                clocksPassed++;
             }
-        
+            if (waitCycles > 0)
+            {
+                waitCycles--;
+            }
 
-      
+            clocksPassed++;
 
-            using (StreamWriter writer = new StreamWriter("output.txt"))
-                {
-                    writer.Write(finalDebugg);
-                }
         }
 
         private void initializeILT()
@@ -711,7 +722,8 @@ namespace SharpNES.src.hardware
 
         private void BRK()
         {
-            run = false;
+            halt = true;
+
             PC++;
 
             InterruptDisableFlag = true;
