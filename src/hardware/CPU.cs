@@ -111,6 +111,80 @@ namespace SharpNES.src.hardware
             initializeILT();
         }
 
+        public void Reset()
+        {
+            A = 0x00;
+            X = 0x00;
+            Y = 0x00;
+            SP = 0xFD;
+            absoluteAddress = 0xFFFC;
+
+            byte lowByte = mmu.Read(absoluteAddress);
+            byte highByte = mmu.Read(absoluteAddress + 1);
+
+            absoluteAddress = (ushort)((highByte << 8) | lowByte);
+            PC = absoluteAddress;
+
+            absoluteAddress = 0x0000;
+            relativeAddress = 0x0000;
+            fetchedData = 0x0000;
+
+            status = 0x0000;
+            UnusedFlag = true;
+
+            waitCycles = 8;
+        }
+        public void InterruptRequest()
+        {
+            if (!InterruptDisableFlag)
+            {
+                mmu.Write(0x100 + SP, (PC >> 8) & 0x00FF);
+                SP--;
+                mmu.Write(0x100 + SP, (PC) & 0x00FF);
+                SP--;
+
+                BreakFlag = false;
+                UnusedFlag = true;
+                InterruptDisableFlag = true;
+
+                mmu.Write(0x100 + SP, status);
+                SP--;
+
+                absoluteAddress = 0xFFFE;
+
+                byte lowByte = mmu.Read(absoluteAddress);
+                byte highByte = mmu.Read(absoluteAddress + 1);
+
+                waitCycles = 7;
+            }
+        }
+
+        public void NonMaskableInterrupt()
+        {
+            mmu.Write(0x100 + SP, (PC >> 8) & 0x00FF);
+            SP--;
+            mmu.Write(0x100 + SP, (PC) & 0x00FF);
+            SP--;
+
+            BreakFlag = false;
+            UnusedFlag = true;
+            InterruptDisableFlag = true;
+
+            mmu.Write(0x100 + SP, status);
+            SP--;
+
+            absoluteAddress = 0xFFFA;
+
+            byte lowByte = mmu.Read(absoluteAddress);
+            byte highByte = mmu.Read(absoluteAddress + 1);
+
+            absoluteAddress = (ushort)((highByte << 8) | lowByte);
+            PC = absoluteAddress;
+
+            waitCycles = 8;
+        }
+
+
         bool log = false;
         public void cycle()
         {
@@ -127,7 +201,6 @@ namespace SharpNES.src.hardware
             }
             if (waitCycles == 0)
             {
-
                 UnusedFlag = true;
 
                 if (log)
