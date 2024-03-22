@@ -9,8 +9,6 @@ namespace SharpNES.src.hardware
 {
     internal class CPU
     {
-        public static string debug;
-        public static string finalDebugg;
         private MMU mmu;
 
         private byte A;
@@ -25,7 +23,6 @@ namespace SharpNES.src.hardware
 
         private bool halt;
 
-        // Properties representing individual flags
         public bool CarryFlag
         {
             get { return (status & 0x01) != 0; }
@@ -119,8 +116,8 @@ namespace SharpNES.src.hardware
             SP = 0xFD;
             absoluteAddress = 0xFFFC;
 
-            byte lowByte = mmu.Read(absoluteAddress);
-            byte highByte = mmu.Read(absoluteAddress + 1);
+            byte lowByte = mmu.CPURead(absoluteAddress);
+            byte highByte = mmu.CPURead(absoluteAddress + 1);
 
             absoluteAddress = (ushort)((highByte << 8) | lowByte);
             PC = absoluteAddress;
@@ -138,22 +135,22 @@ namespace SharpNES.src.hardware
         {
             if (!InterruptDisableFlag)
             {
-                mmu.Write(0x100 + SP, (PC >> 8) & 0x00FF);
+                mmu.CPUWrite(0x100 + SP, (PC >> 8) & 0x00FF);
                 SP--;
-                mmu.Write(0x100 + SP, (PC) & 0x00FF);
+                mmu.CPUWrite(0x100 + SP, (PC) & 0x00FF);
                 SP--;
 
                 BreakFlag = false;
                 UnusedFlag = true;
                 InterruptDisableFlag = true;
 
-                mmu.Write(0x100 + SP, status);
+                mmu.CPUWrite(0x100 + SP, status);
                 SP--;
 
                 absoluteAddress = 0xFFFE;
 
-                byte lowByte = mmu.Read(absoluteAddress);
-                byte highByte = mmu.Read(absoluteAddress + 1);
+                byte lowByte = mmu.CPURead(absoluteAddress);
+                byte highByte = mmu.CPURead(absoluteAddress + 1);
 
                 waitCycles = 7;
             }
@@ -161,22 +158,22 @@ namespace SharpNES.src.hardware
 
         public void NonMaskableInterrupt()
         {
-            mmu.Write(0x100 + SP, (PC >> 8) & 0x00FF);
+            mmu.CPUWrite(0x100 + SP, (PC >> 8) & 0x00FF);
             SP--;
-            mmu.Write(0x100 + SP, (PC) & 0x00FF);
+            mmu.CPUWrite(0x100 + SP, (PC) & 0x00FF);
             SP--;
 
             BreakFlag = false;
             UnusedFlag = true;
             InterruptDisableFlag = true;
 
-            mmu.Write(0x100 + SP, status);
+            mmu.CPUWrite(0x100 + SP, status);
             SP--;
 
             absoluteAddress = 0xFFFA;
 
-            byte lowByte = mmu.Read(absoluteAddress);
-            byte highByte = mmu.Read(absoluteAddress + 1);
+            byte lowByte = mmu.CPURead(absoluteAddress);
+            byte highByte = mmu.CPURead(absoluteAddress + 1);
 
             absoluteAddress = (ushort)((highByte << 8) | lowByte);
             PC = absoluteAddress;
@@ -184,101 +181,24 @@ namespace SharpNES.src.hardware
             waitCycles = 8;
         }
 
-
-        bool log = false;
         public void cycle()
         {
             if (halt)
             {
-                if (log)
-                {
-                    using (StreamWriter writer = new StreamWriter("output.txt"))
-                    {
-                        writer.Write(finalDebugg);
-                    }
-                }
                 return;
             }
             if (waitCycles == 0)
             {
                 UnusedFlag = true;
-
-                if (log)
-                {
-                    debug = $"{PC:X4}  ";
-                }
-                opcode = mmu.Read(PC);
+                opcode = mmu.CPURead(PC);
 
                 PC++;
                 waitCycles = ILT[opcode].Cycles;
-                byte oldA = A;
-                byte oldX = X;
-                byte oldY = Y;
-                byte oldS = status;
+               
                 ILT[opcode].AddressingMode();
-                ushort oldPc = PC;
                 ILT[opcode].InstructionAction();
 
                 UnusedFlag = true;
-
-                if (log)
-                {
-                    int spacesNeeded = Math.Max(17 - (debug.Length - debug.LastIndexOf("\n")), 0);
-                    string spaces = new string(' ', spacesNeeded);
-
-                    debug += spaces + ILT[opcode].name;
-                    if (ILT[opcode].InstructionAction == JMP || ILT[opcode].InstructionAction == JSR)
-                    {
-                        debug += $" ${PC:X4}";
-                    }
-                    else if (ILT[opcode].InstructionAction == BEQ || ILT[opcode].InstructionAction == BCC
-                        || ILT[opcode].InstructionAction == BCS || ILT[opcode].InstructionAction == BNE
-                        || ILT[opcode].InstructionAction == BVS || ILT[opcode].InstructionAction == BVC
-                        || ILT[opcode].InstructionAction == BPL || ILT[opcode].InstructionAction == BMI)
-                    {
-                        debug += $" ${(oldPc + relativeAddress) % 0xFFFF:X4}";
-                    }
-                    else if (ILT[opcode].InstructionAction == LDA || ILT[opcode].InstructionAction == LDX || ILT[opcode].InstructionAction == LDY
-                        || ILT[opcode].InstructionAction == AND || ILT[opcode].InstructionAction == CMP || ILT[opcode].InstructionAction == ORA
-                        || ILT[opcode].InstructionAction == EOR || ILT[opcode].InstructionAction == ADC || ILT[opcode].InstructionAction == CPY
-                        || ILT[opcode].InstructionAction == CPX || ILT[opcode].InstructionAction == SBC)
-                    {
-                        debug += $" #${(byte)fetchedData:X2}";
-                    }
-                    else if (ILT[opcode].InstructionAction == STA || ILT[opcode].InstructionAction == STX || ILT[opcode].InstructionAction == STY
-                        || ILT[opcode].InstructionAction == BIT)
-                    {
-                        debug += $" ${absoluteAddress:X2} = ";
-                        if (ILT[opcode].InstructionAction == STA)
-                        {
-                            debug += $"{A:X2}";
-                        }
-                        else if (ILT[opcode].InstructionAction == STX)
-                        {
-                            debug += $"{X:X2}";
-                        }
-                        else if (ILT[opcode].InstructionAction == STY)
-                        {
-                            debug += $"{Y:X2}";
-                        }
-                        else if (ILT[opcode].InstructionAction == BIT)
-                        {
-                            debug += $"{fetchedData:X2}";
-
-                        }
-
-                    }
-
-                    spacesNeeded = Math.Max(49 - (debug.Length - debug.LastIndexOf("\n")), 0);
-                    spaces = new string(' ', spacesNeeded);
-
-
-                    debug += spaces + $"A:{oldA:X2} X:{oldX:X2} Y:{oldY:X2} P:{oldS:X2} SP:{SP:X2} CYC: {clocksPassed}";
-
-
-                    finalDebugg += debug + "\n";
-                    Console.WriteLine(debug);
-                }
             }
             if (waitCycles > 0)
             {
@@ -504,15 +424,15 @@ namespace SharpNES.src.hardware
         {
             if ((ILT[opcode].AddressingMode != IMP))
             {
-                fetchedData = mmu.Read(absoluteAddress);
+                fetchedData = mmu.CPURead(absoluteAddress);
             }
         }
 
         private void ABS()
         {
-            byte lowByte = mmu.Read(PC);
+            byte lowByte = mmu.CPURead(PC);
             PC++;
-            byte highByte = mmu.Read(PC);
+            byte highByte = mmu.CPURead(PC);
             PC++;
             absoluteAddress = (ushort)((highByte << 8) | lowByte);
 
@@ -521,9 +441,9 @@ namespace SharpNES.src.hardware
 
         private void ABX()
         {
-            byte lowByte = mmu.Read(PC);
+            byte lowByte = mmu.CPURead(PC);
             PC++;
-            byte highByte = mmu.Read(PC);
+            byte highByte = mmu.CPURead(PC);
             PC++;
 
             absoluteAddress = (ushort)((highByte << 8) | lowByte);
@@ -535,9 +455,9 @@ namespace SharpNES.src.hardware
 
         private void ABY()
         {
-            byte lowByte = mmu.Read(PC);
+            byte lowByte = mmu.CPURead(PC);
             PC++;
-            byte highByte = mmu.Read(PC);
+            byte highByte = mmu.CPURead(PC);
             PC++;
 
             absoluteAddress = (ushort)((highByte << 8) | lowByte);
@@ -561,22 +481,22 @@ namespace SharpNES.src.hardware
         private void IND()
         {
 
-            byte lowByte = mmu.Read(PC);
+            byte lowByte = mmu.CPURead(PC);
             PC++;
-            byte highByte = mmu.Read(PC);
+            byte highByte = mmu.CPURead(PC);
             PC++;
 
             ushort pointer = (ushort)((highByte << 8) | lowByte);
 
             if (lowByte == 0xFF)
             {
-                highByte = mmu.Read(pointer & 0xFF00);
+                highByte = mmu.CPURead(pointer & 0xFF00);
             }
             else
             {
-                highByte = mmu.Read(pointer + 1);
+                highByte = mmu.CPURead(pointer + 1);
             }
-            lowByte = mmu.Read(pointer);
+            lowByte = mmu.CPURead(pointer);
 
             absoluteAddress = (ushort)(highByte << 8 | lowByte);
 
@@ -584,11 +504,11 @@ namespace SharpNES.src.hardware
 
         private void IDX()
         {
-            ushort ptr = mmu.Read(PC);
+            ushort ptr = mmu.CPURead(PC);
             PC++;
 
-            ushort lowByte = mmu.Read((ushort)((ptr + X) & 0x00FF));
-            ushort highByte = mmu.Read((ushort)((ptr + X + 1) & 0x00FF));
+            ushort lowByte = mmu.CPURead((ushort)((ptr + X) & 0x00FF));
+            ushort highByte = mmu.CPURead((ushort)((ptr + X + 1) & 0x00FF));
 
 
             absoluteAddress = (ushort)((highByte << 8) | lowByte);
@@ -596,11 +516,11 @@ namespace SharpNES.src.hardware
 
         private void IDY()
         {
-            ushort ptr = mmu.Read(PC);
+            ushort ptr = mmu.CPURead(PC);
             PC++;
 
-            ushort lowByte = mmu.Read((ushort)((ptr) & 0x00FF));
-            ushort highByte = mmu.Read((ushort)((ptr + 1) & 0x00FF));
+            ushort lowByte = mmu.CPURead((ushort)((ptr) & 0x00FF));
+            ushort highByte = mmu.CPURead((ushort)((ptr + 1) & 0x00FF));
 
 
             absoluteAddress = (ushort)((highByte << 8) | lowByte);
@@ -613,7 +533,7 @@ namespace SharpNES.src.hardware
 
         private void REL()
         {
-            relativeAddress = mmu.Read(PC);
+            relativeAddress = mmu.CPURead(PC);
             PC++;
             if ((relativeAddress & 0x80) != 0)
                 relativeAddress |= 0xFF00;
@@ -621,21 +541,21 @@ namespace SharpNES.src.hardware
 
         private void ZP0()
         {
-            absoluteAddress = mmu.Read(PC);
+            absoluteAddress = mmu.CPURead(PC);
             PC++;
             absoluteAddress &= 0x00FF;
         }
 
         private void ZPX()
         {
-            absoluteAddress = (ushort)(mmu.Read(PC) + X);
+            absoluteAddress = (ushort)(mmu.CPURead(PC) + X);
             PC++;
             absoluteAddress &= 0x00FF;
         }
 
         private void ZPY()
         {
-            absoluteAddress = (ushort)(mmu.Read(PC) + Y);
+            absoluteAddress = (ushort)(mmu.CPURead(PC) + Y);
             PC++;
             absoluteAddress &= 0x00FF;
         }
@@ -682,7 +602,7 @@ namespace SharpNES.src.hardware
             }
             else
             {
-                mmu.Write(absoluteAddress, (byte)(value & 0x00FF));
+                mmu.CPUWrite(absoluteAddress, (byte)(value & 0x00FF));
             }
 
         }
@@ -801,18 +721,18 @@ namespace SharpNES.src.hardware
 
             InterruptDisableFlag = true;
 
-            mmu.Write((ushort)(0x0100 + SP), (byte)((PC >> 8) & 0x00FF));
+            mmu.CPUWrite((ushort)(0x0100 + SP), (byte)((PC >> 8) & 0x00FF));
             SP--;
-            mmu.Write((ushort)(0x0100 + SP), (byte)(PC & 0x00FF));
+            mmu.CPUWrite((ushort)(0x0100 + SP), (byte)(PC & 0x00FF));
             SP--;
 
             BreakFlag = true;
 
-            mmu.Write((ushort)(0x0100 + SP), status);
+            mmu.CPUWrite((ushort)(0x0100 + SP), status);
 
             BreakFlag = false;
 
-            PC = (ushort)(mmu.Read(0xFFFE) | (mmu.Read(0xFFFF) << 8));
+            PC = (ushort)(mmu.CPURead(0xFFFE) | (mmu.CPURead(0xFFFF) << 8));
 
         }
 
@@ -908,7 +828,7 @@ namespace SharpNES.src.hardware
 
             byte value = (byte)(fetchedData - 1);
 
-            mmu.Write(absoluteAddress, value);
+            mmu.CPUWrite(absoluteAddress, value);
 
             ZeroFlag = value == 0x00;
             NegativeFlag = value > 127;
@@ -943,7 +863,7 @@ namespace SharpNES.src.hardware
 
             byte value = (byte)(fetchedData + 1);
 
-            mmu.Write(absoluteAddress, value);
+            mmu.CPUWrite(absoluteAddress, value);
 
 
             ZeroFlag = value == 0x00;
@@ -976,9 +896,9 @@ namespace SharpNES.src.hardware
         {
             PC--;
 
-            mmu.Write((ushort)(0x0100 + SP), (byte)((PC >> 8) & 0x00FF));
+            mmu.CPUWrite((ushort)(0x0100 + SP), (byte)((PC >> 8) & 0x00FF));
             SP--;
-            mmu.Write((ushort)(0x0100 + SP), (byte)(PC & 0x00FF));
+            mmu.CPUWrite((ushort)(0x0100 + SP), (byte)(PC & 0x00FF));
             SP--;
 
             PC = absoluteAddress;
@@ -1028,7 +948,7 @@ namespace SharpNES.src.hardware
             }
             else
             {
-                mmu.Write(absoluteAddress, value & 0x00FF);
+                mmu.CPUWrite(absoluteAddress, value & 0x00FF);
             }
 
         }
@@ -1048,14 +968,14 @@ namespace SharpNES.src.hardware
 
         private void PHA()
         {
-            mmu.Write(0x0100 + SP, A);
+            mmu.CPUWrite(0x0100 + SP, A);
             SP--;
 
         }
 
         private void PHP()
         {
-            mmu.Write(0x0100 + SP, status);
+            mmu.CPUWrite(0x0100 + SP, status);
             BreakFlag = false;
             UnusedFlag = false;
             SP--;
@@ -1064,7 +984,7 @@ namespace SharpNES.src.hardware
         private void PLA()
         {
             SP++;
-            A = mmu.Read(0x0100 + SP);
+            A = mmu.CPURead(0x0100 + SP);
             ZeroFlag = A == 0x00;
             NegativeFlag = (A > 127);
 
@@ -1073,7 +993,7 @@ namespace SharpNES.src.hardware
         private void PLP()
         {
             SP++;
-            status = mmu.Read(0x0100 + SP);
+            status = mmu.CPURead(0x0100 + SP);
 
         }
 
@@ -1092,7 +1012,7 @@ namespace SharpNES.src.hardware
             }
             else
             {
-                mmu.Write(absoluteAddress, value & 0x00FF);
+                mmu.CPUWrite(absoluteAddress, value & 0x00FF);
             }
         }
 
@@ -1110,28 +1030,28 @@ namespace SharpNES.src.hardware
             }
             else
             {
-                mmu.Write(absoluteAddress, value & 0x00FF);
+                mmu.CPUWrite(absoluteAddress, value & 0x00FF);
             }
         }
 
         private void RTI()
         {
             SP++;
-            status = mmu.Read(0x0100 + SP);
+            status = mmu.CPURead(0x0100 + SP);
 
             SP++;
-            PC = mmu.Read(0x0100 + SP);
+            PC = mmu.CPURead(0x0100 + SP);
             SP++;
-            PC |= (ushort)(mmu.Read(0x0100 + SP) << 8);
+            PC |= (ushort)(mmu.CPURead(0x0100 + SP) << 8);
 
         }
 
         private void RTS()
         {
             SP++;
-            PC = mmu.Read(0x0100 + SP);
+            PC = mmu.CPURead(0x0100 + SP);
             SP++;
-            PC |= (ushort)(mmu.Read(0x0100 + SP) << 8);
+            PC |= (ushort)(mmu.CPURead(0x0100 + SP) << 8);
 
             PC++;
         }
@@ -1167,17 +1087,17 @@ namespace SharpNES.src.hardware
 
         private void STA()
         {
-            mmu.Write(absoluteAddress, A);
+            mmu.CPUWrite(absoluteAddress, A);
         }
 
         private void STX()
         {
-            mmu.Write(absoluteAddress, X);
+            mmu.CPUWrite(absoluteAddress, X);
         }
 
         private void STY()
         {
-            mmu.Write(absoluteAddress, Y);
+            mmu.CPUWrite(absoluteAddress, Y);
         }
 
         private void TAX()

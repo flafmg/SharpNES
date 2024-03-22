@@ -4,7 +4,7 @@ namespace SharpNES.src.hardware
 {
     public class MMU
     {
-        private readonly byte[] ram = new byte[2048]; 
+        private byte[] ram = new byte[2048];
         private ROM rom;
 
         public MMU(ROM rom)
@@ -12,58 +12,65 @@ namespace SharpNES.src.hardware
             this.rom = rom;
         }
 
-        public byte Read(ushort address)
+        public byte CPURead(ushort address)
         {
-            //Console.WriteLine($"reading 0x{address:X4}");
+            byte data;
 
-            if (address < 0x2000)
+            switch (address)
             {
-                CPU.debug += ($"{(ram[address % 0x0800]):X2} ");
-                return ram[address % 0x0800];
-              
-            }
-            else if (address >= 0x2000 && address <= 0x3FFF)
-            {
-                Console.WriteLine($"PPU register read at address {address}");
-                return 0;
-            }
-            else if(address >= 0x8000)
-            {
-                CPU.debug += ($"{(rom.ProgramRomBanks[0][((address - 0x8000) % 0x4000)]):X2} ");
-                return rom.ProgramRomBanks[0][((address - 0x8000) % 0x4000)];
-            }
+                case ushort addr when addr < 0x2000:
+                    return ram[addr % 0x0800];
 
-            return 0;
-        }
-        public byte Read(int address)
-        {
-            return Read((ushort)address);
-        }
+                case ushort addr when addr >= 0x2000 && addr < 0x4000:
+                    return 0;
 
-        public void Write(ushort address, byte value)
-        {
-            if (address < 0x2000)
-            {
-                ram[address & 0x07FF] = value;
-            }
-            else if (address >= 0x2000 && address <= 0x3FFF)
-            {
-                Console.WriteLine($"PPU register write at address {address}, value: {value}");
-            }
-            else 
-            {
-                Console.WriteLine("attempedt to write on Rom space");
+                case ushort addr when addr >= 0x8000:
+                    return rom.programRomBanks[0][((addr - 0x8000) % 0x4000)];
+
+                default:
+                    return 0;
             }
         }
 
-        public void Write(ushort address, int v)
+        public byte CPURead(int address)
         {
-            Write(address, (byte)v);
+            return CPURead((ushort)address);
         }
 
-        public void Write(int address, int v)
+        public void CPUWrite(ushort address, byte value)
         {
-            Write((ushort)address, (byte)v);
+            switch (address)
+            {
+                case ushort addr when addr < 0x2000:
+                    ram[addr & 0x07FF] = value;
+                    break;
+
+                case ushort addr when addr >= 0x2000 && addr <= 0x3FFF:
+                    Console.WriteLine($"PPU register write at address {address}, value: {value}");
+                    break;
+
+                default:
+                    Console.WriteLine("Attempted to write on ROM space");
+                    break;
+            }
         }
+
+        public void CPUWrite(ushort address, int v)
+        {
+            CPUWrite(address, (byte)v);
+        }
+
+        public void CPUWrite(int address, int v)
+        {
+            CPUWrite((ushort)address, (byte)v);
+        }
+
+
+        // PPU STUFF
+
+        private byte[] nameTable = new byte[2048];
+        private byte[] pallete = new byte[32];
+
+
     }
 }

@@ -4,14 +4,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SharpNES.src.hardware
+namespace SharpNES.src.hardware.mappers
 {
-    internal class PPU
+    public class Mapper
     {
-
-        public PPU() 
-        {
-
-        }
+        
     }
 }
