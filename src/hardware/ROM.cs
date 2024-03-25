@@ -22,7 +22,7 @@ namespace SharpNES.src.hardware
         public byte playChoice10 { get; private set; }
         public byte inesFormatVersion { get; private set; }
 
-        public Mapper mapper;
+        public IMapper mapper;
         public ROM(string filePath)
         {
             LoadRom(filePath);
