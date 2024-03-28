@@ -6,8 +6,8 @@ namespace SharpNES.src.window
 {
     public class Window
     {
-        public static int Width;
-        public static int Height;
+        public int Width;
+        public int Height;
 
         private nint windowPtr;
         private bool isFullscreen = false;
@@ -32,7 +32,11 @@ namespace SharpNES.src.window
             Width = windowWidth;
             Height = windowHeight;
         }
-
+        public bool PollEvent(out SDL.SDL_Event sdlEvent)
+        {
+            UpdateWindowSize();
+            return SDL.SDL_PollEvent(out sdlEvent) != 0;
+        }
         public void ShowMessageBox(string title, string message, SDL.SDL_MessageBoxFlags MBFlags)
         {
             SDL.SDL_ShowSimpleMessageBox(MBFlags, title, message, nint.Zero);

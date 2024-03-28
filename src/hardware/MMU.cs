@@ -6,26 +6,31 @@ namespace SharpNES.src.hardware
     {
         private byte[] ram = new byte[2048];
         private ROM rom;
+        private PPU ppu;
 
         public MMU(ROM rom)
         {
             this.rom = rom;
+  
+        }
+        public void addPPU(PPU ppu)
+        {
+            this.ppu = ppu;
         }
 
         public byte CPURead(ushort address)
         {
-            byte data;
-
             switch (address)
             {
                 case ushort addr when addr < 0x2000:
                     return ram[addr % 0x0800];
 
                 case ushort addr when addr >= 0x2000 && addr < 0x4000:
-                    return 0;
+                    Console.WriteLine("ppu read");
+                    return ppu.Read((ushort)(addr % 0x0008));
 
                 case ushort addr when addr >= 0x8000:
-                    return rom.programRomBanks[0][((addr - 0x8000) % 0x4000)];
+                    return rom.CPURead(addr);
 
                 default:
                     return 0;
@@ -46,11 +51,11 @@ namespace SharpNES.src.hardware
                     break;
 
                 case ushort addr when addr >= 0x2000 && addr <= 0x3FFF:
-                    Console.WriteLine($"PPU register write at address {address}, value: {value}");
+                    ppu.Write((ushort)(addr % 0x0008), value);
                     break;
 
                 default:
-                    Console.WriteLine("Attempted to write on ROM space");
+                    rom.CPUWrite(address, value);
                     break;
             }
         }
@@ -66,11 +71,55 @@ namespace SharpNES.src.hardware
         }
 
 
-        // PPU STUFF
+        public byte[] nameTable = new byte[2048];
+        public byte[] palette = new byte[32];
 
-        private byte[] nameTable = new byte[2048];
-        private byte[] pallete = new byte[32];
+        public byte PPURead(ushort address)
+        {
+            if(address < 0x2000)
+            {
+                return rom.PPURead(address);
+            }
+            else if(address >= 0x2000 && address <= 0x3EFF)
+            {
+                return 0;
+            }
+            else if (address >= 0x3F00 && address <= 0x3FFF)
+            {
+                address &= 0x001F;
+                if (address == 0x0010) address = 0x0000;
+                if (address == 0x0014) address = 0x0004;
+                if (address == 0x0018) address = 0x0008;
+                if (address == 0x001C) address = 0x000C;
+                return palette[address];
+            }
+            return 0;
+        }
+        public void PPUWrite(ushort address, byte value)
+        {
+            if (address < 0x2000)
+            {
+                 rom.PPUWrite(address, value);
+            }
+            else if (address >= 0x2000 && address <= 0x3EFF)
+            {
+               
+            }
+            else if (address >= 0x3F00 && address <= 0x3FFF)
+            {
+                address &= 0x001F;
+                if (address == 0x0010) address = 0x0000;
+                if (address == 0x0014) address = 0x0004;
+                if (address == 0x0018) address = 0x0008;
+                if (address == 0x001C) address = 0x000C;
+                palette[address] = value;
+            }
+         
+        }
 
-
+        internal byte PPURead(int addr)
+        {
+            return PPURead((ushort)addr);
+        }
     }
 }

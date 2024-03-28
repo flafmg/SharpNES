@@ -6,9 +6,9 @@ namespace SharpNES.src
 {
     internal class SharpNES
     {
-        private Window window;
-        private Input input;
-        private Renderer renderer;
+        public static Window window {  get; private set; }
+        public static Input input { get; private set; }
+        public static Renderer renderer {  get; private set; }
 
         private NES nes;
 
@@ -35,12 +35,12 @@ namespace SharpNES.src
                 throw new Exception($"Failed to initialize SDL_mixer: {SDL.SDL_GetError()}");
             }
 
-            window = new Window("SharpNes - waiting rom", 480, 640, true);
+            window = new Window("SharpNes - waiting rom", 480, 840, true);
             input = new Input();
-            renderer = new Renderer(window, 240, 256);
+            renderer = new Renderer(window);
 
             ROM rom = new ROM("nestest.nes");
-            nes = new NES(renderer, rom);
+            nes = new NES( rom);
             nes.Resume();
             Run();
         }
@@ -49,7 +49,7 @@ namespace SharpNES.src
             running = true;
             while (running)
             {
-                while (SDL.SDL_PollEvent(out SDL.SDL_Event sdlEvent) != 0)
+                while (window.PollEvent(out SDL.SDL_Event sdlEvent))
                 {
                     if (sdlEvent.type == SDL.SDL_EventType.SDL_QUIT)
                     {
@@ -61,6 +61,7 @@ namespace SharpNES.src
                 }
 
                 nes.Run();
+               
             }
 
             Exit();

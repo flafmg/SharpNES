@@ -24,30 +24,19 @@ namespace SharpNES.src.hardware
         private MMU mmu;
         private ConsoleRegion region;
 
-        private const double NTSC_FPS = 60.0;
-        private const double PAL_FPS = 50.0;
-        private const double NTSC_FRAME_TIME = 1000.0 / NTSC_FPS; 
-        private const double PAL_FRAME_TIME = 1000.0 / PAL_FPS;
 
-        private const double CPU_FREQUENCY = 1789773;
-
-        private double frameTime;
-        private double cpuInstructionsPerFrame;
-
-        private Renderer renderer;
-
-        public NES(Renderer renderer, ROM rom)
+        public NES(ROM rom)
         {
-            this.renderer = renderer;
- 
             mmu = new MMU(rom);
             cpu = new CPU(mmu);
-            ppu = new PPU();
+            ppu = new PPU(mmu);
+            mmu.addPPU(ppu);
+
             this.region = rom.region == 0 ? ConsoleRegion.NTSC : ConsoleRegion.PAL;
 
-            frameTime = (region == ConsoleRegion.NTSC) ? NTSC_FRAME_TIME : PAL_FRAME_TIME;
-            cpuInstructionsPerFrame = CPU_FREQUENCY / (region == ConsoleRegion.NTSC ? NTSC_FPS : PAL_FPS);
+            Reset();
 
+            SharpNES.window.SetWindowTitle($"SharpNES - {rom.romName}");
         }
 
         public void Resume()
@@ -60,37 +49,57 @@ namespace SharpNES.src.hardware
         }
         public void Reset()
         {
-
+            cpu.Reset();
         }
-
+        int globalCycleCount = 0;
         public void Run()
         {
-           
+
             if (running)
             {
-                double startTime = GetCurrentTime();
+                Cycle();
+                
 
-                for (int i = 0; i < cpuInstructionsPerFrame; i++)
+                if (SharpNES.input.IsKeyClicked(SDL2.SDL.SDL_Scancode.SDL_SCANCODE_SPACE))
                 {
-                    cpu.cycle();
-                }
-
-                renderer.CopyPixelsTexture();
-                renderer.Present();
-
-                double elapsedTime = GetCurrentTime() - startTime;
-                double remainingTime = frameTime - elapsedTime;
-                if (remainingTime > 0)
-                {
-                    int delayMilliseconds = (int)Math.Floor(remainingTime);
-                    Thread.Sleep(delayMilliseconds);
+                    running = false;
                 }
             }
-        }
+            else
+            {
+                if (SharpNES.input.IsKeyClicked(SDL2.SDL.SDL_Scancode.SDL_SCANCODE_SPACE))
+                {
+                    running = true;
+                }
+                else if (SharpNES.input.IsKeyClicked(SDL2.SDL.SDL_Scancode.SDL_SCANCODE_C))
+                {
+                    Cycle();
+                }
+                else if (SharpNES.input.IsKeyClicked(SDL2.SDL.SDL_Scancode.SDL_SCANCODE_F))
+                {
+                    Cycle();
+                    while (!ppu.isFrameCompleted)
+                    {
+                        Cycle();
+                    }
+                    
+                }
+            }
 
-        private double GetCurrentTime()
+            if (ppu.isFrameCompleted)
+            {
+              SharpNES.renderer.Render();
+               
+            }
+        }
+        
+        private void Cycle()
         {
-            return DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+            ppu.Cycle();
+            if (globalCycleCount % 3 == 1)
+                cpu.Cycle();
+
+            globalCycleCount++;
         }
     }
 }

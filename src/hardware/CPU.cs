@@ -17,11 +17,11 @@ namespace SharpNES.src.hardware
         private byte SP;
         private ushort PC = 5;
 
+        private bool halt;
+
         private byte opcode;
 
         private byte status;
-
-        private bool halt;
 
         public bool CarryFlag
         {
@@ -181,7 +181,7 @@ namespace SharpNES.src.hardware
             waitCycles = 8;
         }
 
-        public void cycle()
+        public void Cycle()
         {
             if (halt)
             {
@@ -197,6 +197,7 @@ namespace SharpNES.src.hardware
                
                 ILT[opcode].AddressingMode();
                 ILT[opcode].InstructionAction();
+                //Console.WriteLine(ILT[opcode].name);
 
                 UnusedFlag = true;
             }
