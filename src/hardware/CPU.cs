@@ -89,7 +89,7 @@ namespace SharpNES.src.hardware
             X = 0x0;
             Y = 0x0;
             SP = 0xFD;
-            PC = 0xC000;
+            PC = 0xFFFC;
 
             CarryFlag = false;
             ZeroFlag = false;
@@ -118,9 +118,10 @@ namespace SharpNES.src.hardware
 
             byte lowByte = mmu.CPURead(absoluteAddress);
             byte highByte = mmu.CPURead(absoluteAddress + 1);
+            
 
-            absoluteAddress = (ushort)((highByte << 8) | lowByte);
-            PC = absoluteAddress;
+            PC = (ushort)((highByte << 8) | lowByte);
+            
 
             absoluteAddress = 0x0000;
             relativeAddress = 0x0000;
@@ -197,7 +198,7 @@ namespace SharpNES.src.hardware
                
                 ILT[opcode].AddressingMode();
                 ILT[opcode].InstructionAction();
-                //Console.WriteLine(ILT[opcode].name);
+                //Console.WriteLine($"0x{PC:X4} > 0x{opcode:X2} : {ILT[opcode].name}");
 
                 UnusedFlag = true;
             }

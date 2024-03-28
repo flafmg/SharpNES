@@ -26,7 +26,7 @@ namespace SharpNES.src.hardware
                     return ram[addr % 0x0800];
 
                 case ushort addr when addr >= 0x2000 && addr < 0x4000:
-                    Console.WriteLine("ppu read");
+                    //Console.WriteLine("ppu read");
                     return ppu.Read((ushort)(addr % 0x0008));
 
                 case ushort addr when addr >= 0x8000:
@@ -51,6 +51,7 @@ namespace SharpNES.src.hardware
                     break;
 
                 case ushort addr when addr >= 0x2000 && addr <= 0x3FFF:
+                    //Console.WriteLine($"ppu write {(addr % 0x0008):x4}");
                     ppu.Write((ushort)(addr % 0x0008), value);
                     break;
 
@@ -70,9 +71,7 @@ namespace SharpNES.src.hardware
             CPUWrite((ushort)address, (byte)v);
         }
 
-
-        public byte[] nameTable = new byte[2048];
-        public byte[] palette = new byte[32];
+       
 
         public byte PPURead(ushort address)
         {
@@ -91,7 +90,7 @@ namespace SharpNES.src.hardware
                 if (address == 0x0014) address = 0x0004;
                 if (address == 0x0018) address = 0x0008;
                 if (address == 0x001C) address = 0x000C;
-                return palette[address];
+                return ppu.palette[address];
             }
             return 0;
         }
@@ -112,7 +111,7 @@ namespace SharpNES.src.hardware
                 if (address == 0x0014) address = 0x0004;
                 if (address == 0x0018) address = 0x0008;
                 if (address == 0x001C) address = 0x000C;
-                palette[address] = value;
+                ppu.palette[address] = value;
             }
          
         }

@@ -32,8 +32,10 @@ namespace SharpNES.src.hardware
         {
             if (address >= 0x8000 && address <= 0xFFFF)
             {
-                int bankIndex = (programRomBanks.Length == 2 && address >= 0xC000) ? 1 : 0;
-                int wrapedAdress = (address - 0x8000) % 0x4000;
+                int bankIndex = (programRomBanks.GetLength(0) > 1 && address >= 0xC000) ? 1 : 0;
+
+                int wrapedAdress = (address - 0x8000) % (1024*16);
+                //Console.WriteLine($"reading bank {bankIndex} at value {wrapedAdress:x4} ({address:x4}) ");
                 return programRomBanks[bankIndex, wrapedAdress];
             }
 

@@ -34,9 +34,9 @@ namespace SharpNES.src.hardware
 
             this.region = rom.region == 0 ? ConsoleRegion.NTSC : ConsoleRegion.PAL;
 
-            Reset();
-
+        
             SharpNES.window.SetWindowTitle($"SharpNES - {rom.romName}");
+            Reset();
         }
 
         public void Resume()

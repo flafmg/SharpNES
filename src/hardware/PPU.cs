@@ -30,7 +30,7 @@ namespace SharpNES.src.hardware
             set { control = (byte)((control & 0b11111100) | (value & 0b00000011)); }
         }
 
-        public bool SpriteSize
+        public bool VRAMAddressIncrement
         {
             get { return (control & 0b00000100) != 0; }
             set { control = (byte)((control & 0b11111011) | (value ? 0b00000100 : 0)); }
@@ -48,70 +48,68 @@ namespace SharpNES.src.hardware
             set { control = (byte)((control & 0b11101111) | ((value << 4) & 0b00010000)); }
         }
 
-        public byte VRAMAddressIncrement
+        public bool SpriteSize
         {
-            get { return (byte)((control & 0b00100000) >> 5); }
-            set { control = (byte)((control & 0b11011111) | ((value << 5) & 0b00100000)); }
+            get { return (control & 0b00100000) != 0; }
+            set { control = (byte)((control & 0b11011111) | (value ? 0b00100000 : 0)); }
         }
 
-        public byte NameTableAddress
+        public bool NMIEnabled
         {
-            get { return (byte)((control & 0b11000000) >> 6); }
-            set { control = (byte)((control & 0b00111111) | ((value << 6) & 0b11000000)); }
+            get { return (control & 0b10000000) != 0; }
+            set { control = (byte)((control & 0b01111111) | (value ? 0b10000000 : 0)); }
         }
 
-        // mask
-
-        public bool ColorIntensityRed
+        // Mask
+        public bool Grayscale
         {
             get { return (mask & 0b00000001) != 0; }
             set { mask = (byte)((mask & 0b11111110) | (value ? 0b00000001 : 0)); }
         }
 
-        public bool ColorIntensityGreen
+        public bool ShowBackgroundLeftmost
         {
             get { return (mask & 0b00000010) != 0; }
             set { mask = (byte)((mask & 0b11111101) | (value ? 0b00000010 : 0)); }
         }
 
-        public bool ColorIntensityBlue
+        public bool ShowSpritesLeftmost
         {
             get { return (mask & 0b00000100) != 0; }
             set { mask = (byte)((mask & 0b11111011) | (value ? 0b00000100 : 0)); }
         }
 
-        public bool HideSpritesLeft
+        public bool ShowBackground
         {
             get { return (mask & 0b00001000) != 0; }
             set { mask = (byte)((mask & 0b11110111) | (value ? 0b00001000 : 0)); }
         }
 
-        public bool HideBackgroundLeft
+        public bool ShowSprites
         {
             get { return (mask & 0b00010000) != 0; }
             set { mask = (byte)((mask & 0b11101111) | (value ? 0b00010000 : 0)); }
         }
 
-        public bool ShowSprites
+        public bool EmphasizeRed
         {
             get { return (mask & 0b00100000) != 0; }
             set { mask = (byte)((mask & 0b11011111) | (value ? 0b00100000 : 0)); }
         }
 
-        public bool ShowBackground
+        public bool EmphasizeGreen
         {
             get { return (mask & 0b01000000) != 0; }
             set { mask = (byte)((mask & 0b10111111) | (value ? 0b01000000 : 0)); }
         }
 
-        public bool RedIntensity
+        public bool EmphasizeBlue
         {
             get { return (mask & 0b10000000) != 0; }
             set { mask = (byte)((mask & 0b01111111) | (value ? 0b10000000 : 0)); }
         }
 
-        // status
-
+        // Status
         public bool SpriteOverflow
         {
             get { return (status & 0b00100000) != 0; }
@@ -130,7 +128,8 @@ namespace SharpNES.src.hardware
             set { status = (byte)((status & 0b01111111) | (value ? 0b10000000 : 0)); }
         }
 
-        #endregion flags
+        #endregion
+
 
         private int scanLine;
         private int cycle;
@@ -138,6 +137,9 @@ namespace SharpNES.src.hardware
         private uint[] output = new uint[256 * 240];
 
         private uint[] internalColorPalette = new uint[0x40];
+
+        public byte[] nameTable = new byte[2048];
+        public byte[] palette = new byte[32];
 
         private int vblankSize = 20;
         private int screenWidth = 256;
@@ -165,7 +167,7 @@ namespace SharpNES.src.hardware
 
             if (debug)
             {
-                ppuDebug = new Canvas(128, 258);
+                ppuDebug = new Canvas(128, 260);
                 ppuDebug.x += 128+16+8;
                 renderer.AddCanvas(ppuDebug);
             }
@@ -264,8 +266,10 @@ namespace SharpNES.src.hardware
 
                     if (debug)
                     {
+                       
                         DrawCHRTable(0, 0, 0);
-                        DrawCHRTable(1, 0, 130);
+                        DrawCHRTable(1, 0, 132);
+                        DrawPalette();
                     }
                     ppuVideo.Pixels = output;
                 }
@@ -273,6 +277,7 @@ namespace SharpNES.src.hardware
             if(scanLine > screenWidth)
             {
                 VerticalBlank = true;
+              
             }
 
  
@@ -287,7 +292,6 @@ namespace SharpNES.src.hardware
                 case 0x0001:
                     break;
                 case 0x0002:
-                    VerticalBlank = true;
                     data = (byte)((status & 0xE0) | (dataBuffer & 0x1F));
                     VerticalBlank = false;
                     addrLatch = 0;
@@ -345,6 +349,7 @@ namespace SharpNES.src.hardware
                     break;
                 case 0x0007: //ppu dat 
                     mmu.PPUWrite(ppuadress, data);
+                    ppuadress++;
                     break;
             }
         }
@@ -373,6 +378,35 @@ namespace SharpNES.src.hardware
                 }
             }
         }
+        public void DrawPalette()
+        {
+            ushort xOffset = 0;
+            ushort yOffset = 128;
+            ushort colorBoxSize = 3;
+            ushort paletteStride = 32;
+            ushort chunkSeparation = 1;
+
+            for (int i = 0; i < 32; i++)
+            {
+                byte colorIndex = palette[i];
+                uint color = internalColorPalette[colorIndex];
+
+                ushort chunkIndex = (ushort)(i / 4);
+                ushort chunkXOffset = (ushort)(xOffset + (chunkIndex * (colorBoxSize * 4 + chunkSeparation)));
+                ushort x = (ushort)(chunkXOffset + ((i % paletteStride) % 4) * (colorBoxSize )); 
+
+                ushort y = (ushort)(yOffset); 
+
+                for (ushort dy = 0; dy < colorBoxSize; dy++)
+                {
+                    for (ushort dx = 0; dx < colorBoxSize; dx++)
+                    {
+                        ppuDebug.Pixels[(x + dx) + (y + dy) * 128] = color;
+                    }
+                }
+            }
+        }
+
 
 
         private uint getColor(byte pallete, byte pixel)
