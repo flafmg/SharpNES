@@ -99,6 +99,11 @@ namespace SharpNES.src.hardware
             if (globalCycleCount % 3 == 1)
                 cpu.Cycle();
 
+            if(ppu.NMIEnabled){
+                cpu.NonMaskableInterrupt();
+                ppu.NMIEnabled = false;
+            }
+
             globalCycleCount++;
         }
     }

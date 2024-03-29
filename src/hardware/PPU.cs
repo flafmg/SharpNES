@@ -138,7 +138,7 @@ namespace SharpNES.src.hardware
 
         private uint[] internalColorPalette = new uint[0x40];
 
-        public byte[] nameTable = new byte[2048];
+        public byte[,] nameTable = new byte[2,1024];
         public byte[] palette = new byte[32];
 
         private int vblankSize = 20;
@@ -242,15 +242,20 @@ namespace SharpNES.src.hardware
 
         }
 
+        byte selPall = 0;
+
+
         public void Cycle()
         {
             
             isFrameCompleted = false;
             if (scanLine < screenHeight && scanLine >= 0 && cycle < screenWidth)
             {
-                uint color = internalColorPalette[(scanLine+cycle) % 0x40];
+                VerticalBlank = false;
+               
+                uint color = 0;
+               
                 output[scanLine * screenWidth + cycle] = color;
-                
             }
 
             cycle++;
@@ -266,9 +271,13 @@ namespace SharpNES.src.hardware
 
                     if (debug)
                     {
-                       
-                        DrawCHRTable(0, 0, 0);
-                        DrawCHRTable(1, 0, 132);
+                        if(SharpNES.input.IsKeyClicked(SDL.SDL_Scancode.SDL_SCANCODE_P))
+                        {
+                            selPall++;
+                            selPall %= 9;
+                        }
+                        DrawCHRTable(0, selPall, 0);
+                        DrawCHRTable(1, selPall, 132);
                         DrawPalette();
                     }
                     ppuVideo.Pixels = output;
@@ -349,7 +358,7 @@ namespace SharpNES.src.hardware
                     break;
                 case 0x0007: //ppu dat 
                     mmu.PPUWrite(ppuadress, data);
-                    ppuadress++;
+                    ppuadress += (ushort)(VRAMAddressIncrement ? 32 : 1);
                     break;
             }
         }

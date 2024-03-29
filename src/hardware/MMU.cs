@@ -81,7 +81,45 @@ namespace SharpNES.src.hardware
             }
             else if(address >= 0x2000 && address <= 0x3EFF)
             {
-                return 0;
+                address -= 0x2000;
+                if(rom.mirroring == 1)
+                {
+                    if(address >= 0x0000 && address <= 0x03ff)
+                    {
+                        return ppu.nameTable[0,address & 0x03ff];
+                    }
+                    else if(address >= 0x0400 && address <= 0x07ff)
+                    {
+                        return ppu.nameTable[1,address & 0x03ff];
+                    }
+                    else if(address >= 0x0800 && address <= 0x0Bff)
+                    {
+                        return ppu.nameTable[0,address & 0x03ff];
+                    }
+                    else if(address >= 0x0C00 && address <= 0x0fff)
+                    {
+                        return ppu.nameTable[1,address & 0x03ff];
+                    }
+                }
+                else
+                {
+                    if(address >= 0x0000 && address <= 0x03ff)
+                    {
+                        return ppu.nameTable[0,address & 0x03ff];
+                    }
+                    else if(address >= 0x0400 && address <= 0x07ff)
+                    {
+                        return ppu.nameTable[0,address & 0x03ff];
+                    }
+                    else if(address >= 0x0800 && address <= 0x0Bff)
+                    {
+                        return ppu.nameTable[1,address & 0x03ff];
+                    }
+                    else if(address >= 0x0C00 && address <= 0x0fff)
+                    {
+                        return ppu.nameTable[1,address & 0x03ff];
+                    }
+                }
             }
             else if (address >= 0x3F00 && address <= 0x3FFF)
             {
@@ -102,7 +140,45 @@ namespace SharpNES.src.hardware
             }
             else if (address >= 0x2000 && address <= 0x3EFF)
             {
-               
+                              address -= 0x2000;
+                if(rom.mirroring == 1)
+                {
+                    if(address >= 0x0000 && address <= 0x03ff)
+                    {
+                        ppu.nameTable[0,address & 0x03ff] = value;
+                    }
+                    else if(address >= 0x0400 && address <= 0x07ff)
+                    {
+                        ppu.nameTable[1,address & 0x03ff] = value;
+                    }
+                    else if(address >= 0x0800 && address <= 0x0Bff)
+                    {
+                        ppu.nameTable[0,address & 0x03ff] = value;
+                    }
+                    else if(address >= 0x0C00 && address <= 0x0fff)
+                    {
+                        ppu.nameTable[1,address & 0x03ff] = value;
+                    }
+                }
+                else
+                {
+                    if(address >= 0x0000 && address <= 0x03ff)
+                    {
+                        ppu.nameTable[0,address & 0x03ff] = value;
+                    }
+                    else if(address >= 0x0400 && address <= 0x07ff)
+                    {
+                        ppu.nameTable[0,address & 0x03ff] = value;
+                    }
+                    else if(address >= 0x0800 && address <= 0x0Bff)
+                    {
+                        ppu.nameTable[1,address & 0x03ff] = value;
+                    }
+                    else if(address >= 0x0C00 && address <= 0x0fff)
+                    {
+                       ppu.nameTable[1,address & 0x03ff] = value;
+                    }
+                }
             }
             else if (address >= 0x3F00 && address <= 0x3FFF)
             {
